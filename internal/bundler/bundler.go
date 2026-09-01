@@ -242,6 +242,15 @@ func runDry(ctx context.Context, logger *slog.Logger, deps Deps) (Result, error)
 	}
 	logger.Info(fmt.Sprintf(logging.MsgFileUpdated, "POST", deps.Config.BranchName))
 	logger.Info(logging.MsgCreatingMR)
-	logger.Info(fmt.Sprintf(logging.MsgMRCreated, "https://example.invalid/dry-run"))
-	return Result{DryRun: true}, nil
+	mr, err := deps.Client.CreateMR(ctx, deps.Config.Repo, gitlab.CreateMRInput{
+		SourceBranch: deps.Config.BranchName,
+		TargetBranch: deps.Config.TargetBranch,
+		Title:        deps.Config.MRTitle,
+		Description:  deps.Config.MRDescription,
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	logger.Info(fmt.Sprintf(logging.MsgMRCreated, mr.WebURL))
+	return Result{DryRun: true, MRURL: mr.WebURL}, nil
 }
