@@ -1,0 +1,21 @@
+# Build artifacts
+/dist/
+/coverage.out
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Go test artifacts
+*.test
+*.out
+
+# OS
+.DS_Store
+
+# Lefthook
+.lefthook/
+
+# golangci-lint cache
+.golangci.yml.bak

@@ -1,0 +1,52 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - gocritic
+    - nakedret
+    - prealloc
+    - revive
+    - usestdlibvars
+  disable:
+    - cyclop
+    - dupl
+    - exhaustruct
+    - funlen
+    - gocognit
+    - goconst
+    - lll
+    - varnamelen
+    - wsl
+
+  settings:
+    gocritic:
+      disabled-tags:
+        - diagnostic
+        - experimental
+        - performance
+      enabled-tags:
+        - style
+        - opinionated
+    revive:
+      rules:
+        - name: var-naming
+        - name: exported
+        - name: package-comments
+          disabled: true
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/inful/updateext
+
+exclusions:
+  default: false
+  rules: []

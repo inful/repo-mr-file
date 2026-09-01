@@ -1,0 +1,15 @@
+# lefthook configuration
+# See https://github.com/evilmartians/lefthook
+#
+# Install: lefthook install
+# Run manually: lefthook run pre-commit
+
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      glob: "*.go"
+      run: golangci-lint run
+    test:
+      glob: "*.go"
+      run: go test -race -count=1 ./...
