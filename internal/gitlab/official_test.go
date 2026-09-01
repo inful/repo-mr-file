@@ -3,13 +3,17 @@ package gitlab
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	gitlab "gitlab.com/gitlab-org/api/client-go"
 )
 
 // writeJSON is a small helper used by the test server handlers.
@@ -240,5 +244,61 @@ func TestOfficialClient_ListOpenMR_ConflictBranch(t *testing.T) {
 	}
 	if mr == nil || mr.IID != 42 {
 		t.Errorf("mr = %+v, want IID=42", mr)
+	}
+}
+
+func TestClassifyError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want Kind
+	}{
+		{"nil", nil, KindUnknown},
+		{"ErrNotFound", gitlab.ErrNotFound, KindNotFound},
+		{"plain error", errors.New("plain"), KindUnknown},
+		{"net.OpError", &net.OpError{Op: "dial", Err: errors.New("no route")}, KindTransient},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyError("op", tc.err)
+			if tc.err == nil {
+				if got != nil {
+					t.Errorf("classifyError(nil) = %v, want nil", got)
+				}
+				return
+			}
+			e := As(got)
+			if e == nil || e.Kind != tc.want {
+				t.Errorf("classifyError Kind = %v, want %v", e, tc.want)
+			}
+		})
+	}
+}
+
+func TestErrClient_AllMethodsReturnError(t *testing.T) {
+	sentinel := New(KindConfig, "synthetic", errors.New("test error"))
+	ec := &errClient{err: sentinel}
+	ctx := context.Background()
+
+	if _, err := ec.GetProject(ctx, "x"); err == nil || !errors.Is(err, sentinel) {
+		t.Errorf("GetProject = %v, want %v", err, sentinel)
+	}
+	if _, err := ec.GetBranch(ctx, "x", "y"); err == nil || !errors.Is(err, sentinel) {
+		t.Errorf("GetBranch = %v, want %v", err, sentinel)
+	}
+	if _, err := ec.GetFile(ctx, "x", "y", "z"); err == nil || !errors.Is(err, sentinel) {
+		t.Errorf("GetFile = %v, want %v", err, sentinel)
+	}
+	if err := ec.CreateFile(ctx, "x", "y", "z", "m", strings.NewReader("c")); err == nil || !errors.Is(err, sentinel) {
+		t.Errorf("CreateFile = %v, want %v", err, sentinel)
+	}
+	if err := ec.UpdateFile(ctx, "x", "y", "z", "m", "id", strings.NewReader("c")); err == nil || !errors.Is(err, sentinel) {
+		t.Errorf("UpdateFile = %v, want %v", err, sentinel)
+	}
+	if _, err := ec.ListOpenMR(ctx, "x", "y", "z"); err == nil || !errors.Is(err, sentinel) {
+		t.Errorf("ListOpenMR = %v, want %v", err, sentinel)
+	}
+	if _, err := ec.CreateMR(ctx, "x", CreateMRInput{}); err == nil || !errors.Is(err, sentinel) {
+		t.Errorf("CreateMR = %v, want %v", err, sentinel)
 	}
 }

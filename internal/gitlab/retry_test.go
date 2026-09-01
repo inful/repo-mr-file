@@ -3,6 +3,8 @@ package gitlab
 import (
 	"context"
 	"errors"
+	"math/rand"
+	"strings"
 	"testing"
 	"time"
 )
@@ -154,11 +156,44 @@ func TestRetryDo_UntypedErrorNotRetried(t *testing.T) {
 	}
 }
 
+func TestApplyJitter_WithExplicitRand(t *testing.T) {
+	r := rand.New(rand.NewSource(42)) //nolint:gosec // deterministic test fixture
+	d := 100 * time.Millisecond
+	for i := 0; i < 5; i++ {
+		got := applyJitter(d, 0.5, r)
+		if got <= 0 || got > 2*d {
+			t.Errorf("applyJitter(%d, 0.5) = %v, want in (0, %d]", d, got, 2*d)
+		}
+	}
+}
+
+func TestApplyJitter_NoJitterNoRand(t *testing.T) {
+	d := 100 * time.Millisecond
+	if got := applyJitter(d, 0, nil); got != d {
+		t.Errorf("applyJitter(d, 0, nil) = %v, want %v", got, d)
+	}
+}
+
 func TestWithRetry_DelegatesToInner(t *testing.T) {
 	inner := &recordingClient{}
 	c := WithRetry(inner, RetryConfig{MaxAttempts: 1, InitialBackoff: time.Millisecond})
-	_, _ = c.GetProject(context.Background(), "foo/bar")
-	if len(inner.calls) != 1 || inner.calls[0].method != "GetProject" {
-		t.Errorf("inner.calls = %+v, want one GetProject call", inner.calls)
+	ctx := context.Background()
+
+	_, _ = c.GetProject(ctx, "foo/bar")
+	_, _ = c.GetBranch(ctx, "foo/bar", "main")
+	_, _ = c.GetFile(ctx, "foo/bar", "ca.pem", "main")
+	_ = c.CreateFile(ctx, "foo/bar", "b", "ca.pem", "m", strings.NewReader("c"))
+	_ = c.UpdateFile(ctx, "foo/bar", "b", "ca.pem", "m", "id", strings.NewReader("c"))
+	_, _ = c.ListOpenMR(ctx, "foo/bar", "src", "tgt")
+	_, _ = c.CreateMR(ctx, "foo/bar", CreateMRInput{})
+
+	want := []string{"GetProject", "GetBranch", "GetFile", "CreateFile", "UpdateFile", "ListOpenMR", "CreateMR"}
+	if len(inner.calls) != len(want) {
+		t.Fatalf("inner.calls = %+v, want %d calls", inner.calls, len(want))
+	}
+	for i, m := range want {
+		if inner.calls[i].method != m {
+			t.Errorf("call[%d].method = %q, want %q", i, inner.calls[i].method, m)
+		}
 	}
 }
