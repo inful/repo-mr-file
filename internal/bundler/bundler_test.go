@@ -188,7 +188,7 @@ func stubDeps(t *testing.T, mock *mockGitLab, bundle []byte, config Config) Deps
 
 func defaultConfig() Config {
 	return Config{
-		Tag:           "v1.2.3",
+		Label:         "v1.2.3",
 		Repo:          "foo/bar",
 		TargetPath:    "ca.pem",
 		TargetBranch:  "main",

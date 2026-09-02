@@ -163,7 +163,7 @@ func run(args []string, stdout, stderr io.Writer, clientOverride platforms.Clien
 		Client: client,
 		Logger: logger,
 		Config: bundler.Config{
-			Tag:           cli.Tag,
+			Label:         cli.Label,
 			Repo:          cli.Repo,
 			TargetPath:    cli.TargetPath,
 			TargetBranch:  cli.TargetBranch,

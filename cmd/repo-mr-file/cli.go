@@ -11,12 +11,12 @@ import (
 // CLI holds all flags and env-var bindings for the create-bundle-mr binary.
 //
 // Defaults and required fields are expressed via kong struct tags.
-// Templated defaults (e.g. branch name based on --tag) are populated by the
+// Templated defaults (e.g. branch name based on --label) are populated by the
 // AfterApply hook; file-existence checks are done in Validate.
 type CLI struct {
 	// Required inputs.
-	Tag        string `required:"" help:"Release tag that identifies this update."`
-	Repo       string `required:"" help:"GitLab project path to update."`
+	Label      string `required:"" help:"Identifier for this update (e.g. a release version, date, or change name)."`
+	Repo       string `required:"" help:"Repository path (group/project for GitLab, owner/name for GitHub, owner/name for Gitea/Forgejo)."`
 	TargetPath string `required:"" name:"target-path" help:"Path of the file inside the target repo."`
 	SourcePath string `required:"" name:"source-path" help:"Local path to the source file."`
 
@@ -29,10 +29,10 @@ type CLI struct {
 	TargetBranch string `env:"TARGET_BRANCH" name:"target-branch" help:"Branch to receive the MR. Defaults to the project default branch."`
 
 	// Templates (substituted by AfterApply when left empty).
-	BranchName    string `default:"" name:"branch-name" help:"Branch name (default: chore/update-ca-bundle-<tag>)."`
-	CommitMessage string `default:"" name:"commit-message" help:"Commit message (default uses --tag value)."`
+	BranchName    string `default:"" name:"branch-name" help:"Branch name (default: update-<label>)."`
+	CommitMessage string `default:"" name:"commit-message" help:"Commit message (default uses --label value)."`
 	MRTitle       string `default:"" name:"mr-title" help:"MR title (defaults to --commit-message)."`
-	MRDescription string `default:"" name:"mr-description" help:"MR description (default template uses --tag value)."`
+	MRDescription string `default:"" name:"mr-description" help:"MR description (default template uses --label value)."`
 
 	// Retry policy.
 	Retries      int           `default:"3" help:"Additional attempts per API call after 5xx/429."`
@@ -55,7 +55,7 @@ type CLI struct {
 	Logger *slog.Logger `kong:"-"`
 }
 
-// AfterApply populates the templated defaults that reference --tag and
+// AfterApply populates the templated defaults that reference --label and
 // derives --api-url from --api-base. Kong invokes this after
 // command-line values have been applied and validation has succeeded.
 //
@@ -63,18 +63,18 @@ type CLI struct {
 // workflow. Override any of these via flags for project-specific wording.
 func (c *CLI) AfterApply() error {
 	if c.BranchName == "" {
-		c.BranchName = fmt.Sprintf("update-%s", c.Tag)
+		c.BranchName = fmt.Sprintf("update-%s", c.Label)
 	}
 	if c.CommitMessage == "" {
-		c.CommitMessage = fmt.Sprintf("Update %s to release %s", c.TargetPath, c.Tag)
+		c.CommitMessage = fmt.Sprintf("Update %s to %s", c.TargetPath, c.Label)
 	}
 	if c.MRTitle == "" {
 		c.MRTitle = c.CommitMessage
 	}
 	if c.MRDescription == "" {
 		c.MRDescription = fmt.Sprintf(
-			"Updates %s from release %s.",
-			c.TargetPath, c.Tag,
+			"Updates %s to %s.",
+			c.TargetPath, c.Label,
 		)
 	}
 	if c.APIURL == "" {

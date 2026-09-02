@@ -24,7 +24,7 @@ import (
 
 // Config is the subset of CLI fields the bundler needs.
 type Config struct {
-	Tag           string
+	Label         string
 	Repo          string
 	TargetPath    string
 	TargetBranch  string

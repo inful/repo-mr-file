@@ -25,7 +25,7 @@ func writeBundle(t *testing.T) string {
 // (all required flags provided, bundle points at a real file).
 func validArgs(bundle string) []string {
 	return []string{
-		"--tag=v1.2.3",
+		"--label=v1.2.3",
 		"--repo=some/project",
 		"--target-path=ca.pem",
 		"--source-path=" + bundle,
@@ -66,11 +66,11 @@ func TestCLI_RequiredFlagsMissing(t *testing.T) {
 		args    []string
 		missing string
 	}{
-		{"tag", []string{"--repo=r", "--target-path=c", "--source-path=" + bundle, "--api-token=t"}, "--tag"},
-		{"repo", []string{"--tag=t", "--target-path=c", "--source-path=" + bundle, "--api-token=t"}, "--repo"},
-		{"target-path", []string{"--tag=t", "--repo=r", "--source-path=" + bundle, "--api-token=t"}, "--target-path"},
-		{"bundle", []string{"--tag=t", "--repo=r", "--target-path=c", "--api-token=t"}, "--source-path"},
-		{"api-token", []string{"--tag=t", "--repo=r", "--target-path=c", "--source-path=" + bundle}, "--api-token"},
+		{"label", []string{"--repo=r", "--target-path=c", "--source-path=" + bundle, "--api-token=t"}, "--label"},
+		{"repo", []string{"--label=t", "--target-path=c", "--source-path=" + bundle, "--api-token=t"}, "--repo"},
+		{"target-path", []string{"--label=t", "--repo=r", "--source-path=" + bundle, "--api-token=t"}, "--target-path"},
+		{"bundle", []string{"--label=t", "--repo=r", "--target-path=c", "--api-token=t"}, "--source-path"},
+		{"api-token", []string{"--label=t", "--repo=r", "--target-path=c", "--source-path=" + bundle}, "--api-token"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -93,7 +93,7 @@ func TestCLI_EnvBindingAPIBase(t *testing.T) {
 	t.Setenv("API_TOKEN", "env-token")
 
 	cli := mustParseCLI(t,
-		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle,
+		"--label=t", "--repo=r", "--target-path=c", "--source-path="+bundle,
 	)
 
 	if got, want := cli.APIBase, "https://gitlab.example.com/api/v4"; got != want {
@@ -109,7 +109,7 @@ func TestCLI_FlagOverridesEnv(t *testing.T) {
 	t.Setenv("API_BASE", "https://env.example.com/api/v4")
 
 	cli := mustParseCLI(t,
-		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
+		"--label=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
 		"--api-base=https://flag.example.com/api/v4",
 	)
 
@@ -149,7 +149,7 @@ func TestCLI_Defaults(t *testing.T) {
 func TestCLI_BoolFlags(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t,
-		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
+		"--label=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
 		"--verbose", "--dry-run",
 	)
 
@@ -166,19 +166,19 @@ func TestCLI_BoolFlags(t *testing.T) {
 func TestCLI_AfterApplyTemplating(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t,
-		"--tag=v9.9.9", "--repo=r", "--target-path=docs/ips.txt", "--source-path="+bundle, "--api-token=tk",
+		"--label=v9.9.9", "--repo=r", "--target-path=docs/ips.txt", "--source-path="+bundle, "--api-token=tk",
 	)
 
 	if got, want := cli.BranchName, "update-v9.9.9"; got != want {
 		t.Errorf("BranchName = %q, want %q", got, want)
 	}
-	if got, want := cli.CommitMessage, "Update docs/ips.txt to release v9.9.9"; got != want {
+	if got, want := cli.CommitMessage, "Update docs/ips.txt to v9.9.9"; got != want {
 		t.Errorf("CommitMessage = %q, want %q", got, want)
 	}
 	if cli.MRTitle != cli.CommitMessage {
 		t.Errorf("MRTitle = %q, want %q (defaulted from CommitMessage)", cli.MRTitle, cli.CommitMessage)
 	}
-	if got, want := cli.MRDescription, "Updates docs/ips.txt from release v9.9.9."; got != want {
+	if got, want := cli.MRDescription, "Updates docs/ips.txt to v9.9.9."; got != want {
 		t.Errorf("MRDescription = %q, want %q", got, want)
 	}
 }
@@ -195,7 +195,7 @@ func TestCLI_AfterApplyAPIURLDerived(t *testing.T) {
 func TestCLI_AfterApplyDoesNotOverwriteExplicit(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t,
-		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
+		"--label=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
 		"--branch-name=custom-branch",
 		"--commit-message=custom message",
 		"--mr-title=custom title",
@@ -221,7 +221,7 @@ func TestCLI_AfterApplyDoesNotOverwriteExplicit(t *testing.T) {
 
 func TestCLI_ValidateRejectsMissingBundle(t *testing.T) {
 	_, err := parseCLI(t,
-		"--tag=t", "--repo=r", "--target-path=c",
+		"--label=t", "--repo=r", "--target-path=c",
 		"--source-path=/nonexistent/path/ca.pem",
 		"--api-token=tk",
 	)
@@ -236,7 +236,7 @@ func TestCLI_ValidateRejectsMissingBundle(t *testing.T) {
 func TestCLI_ValidateRejectsDirectory(t *testing.T) {
 	dir := t.TempDir()
 	_, err := parseCLI(t,
-		"--tag=t", "--repo=r", "--target-path=c",
+		"--label=t", "--repo=r", "--target-path=c",
 		"--source-path="+dir,
 		"--api-token=tk",
 	)
@@ -253,7 +253,7 @@ func TestCLI_ValidateRejectsDirectory(t *testing.T) {
 func TestCLI_LogFormatEnum(t *testing.T) {
 	bundle := writeBundle(t)
 	_, err := parseCLI(t,
-		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
+		"--label=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
 		"--log-format=xml",
 	)
 	if err == nil {

@@ -110,7 +110,7 @@ func stubRunDeps(t *testing.T) ([]string, string) {
 		t.Fatal(err)
 	}
 	return []string{
-		"--tag=v1.2.3",
+		"--label=v1.2.3",
 		"--repo=foo/bar",
 		"--target-path=ca.pem",
 		"--source-path=" + bundle,
@@ -177,7 +177,7 @@ func TestRun_BadArgs_Exit2(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	got := run([]string{"--repo=foo/bar"}, &stdout, &stderr, nil)
 	if got != 2 {
-		t.Errorf("exit code = %d, want 2 for missing --tag", got)
+		t.Errorf("exit code = %d, want 2 for missing --label", got)
 	}
 }
 
@@ -194,7 +194,7 @@ func TestRun_InvalidLogFormat_Exit2(t *testing.T) {
 func TestRun_BundleFileMissing_Exit2(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	got := run([]string{
-		"--tag=t",
+		"--label=t",
 		"--repo=foo/bar",
 		"--target-path=ca.pem",
 		"--source-path=/nonexistent/file.pem",

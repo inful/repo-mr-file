@@ -35,7 +35,7 @@ default is `gitlab`. `--api-base` / `--api-token` work for all four.
 
 ```bash
 repo-mr-file \
-  --tag=v1.2.3 \
+  --label=v1.2.3 \
   --platform=github \
   --github-user=octocat \
   --repo=octocat/hello \
@@ -47,7 +47,7 @@ Or for GitLab (the default platform):
 
 ```bash
 repo-mr-file \
-  --tag=v1.2.3 \
+  --label=v1.2.3 \
   --repo=some-group/some-project \
   --target-path=path/inside/repo/some-file.txt \
   --source-path=/local/path/to/source-file.txt
@@ -57,7 +57,7 @@ repo-mr-file \
 
 | Flag              | Env var        | Default                                       |
 |-------------------|----------------|-----------------------------------------------|
-| `--tag`           | —              | (required)                                    |
+| `--label`         | —              | (required; any identifier — release version, date, change name) |
 | `--repo`          | —              | (required)                                    |
 | `--target-path`   | —              | (required)                                    |
 | `--source-path`   | —              | (required)                                    |
@@ -67,10 +67,10 @@ repo-mr-file \
 | `--api-url`       | `API_URL`      | derived from `--api-base` (strips `/api/v4` / `/api/v3` / `/api/v1`) |
 | `--api-token`     | `API_TOKEN`    | (required)                                    |
 | `--target-branch` | `TARGET_BRANCH`| project default branch                        |
-| `--branch-name`   | —              | `update-${TAG}`                               |
-| `--commit-message`| —              | `Update ${TARGET_PATH} to release ${TAG}`     |
+| `--branch-name`   | —              | `update-${LABEL}`                             |
+| `--commit-message`| —              | `Update ${TARGET_PATH} to ${LABEL}`           |
 | `--mr-title`      | —              | derived from `--commit-message`               |
-| `--mr-description`| —              | `Updates ${TARGET_PATH} from release ${TAG}.` |
+| `--mr-description`| —              | `Updates ${TARGET_PATH} to ${LABEL}.`         |
 | `--retries`       | —              | `3` (additional attempts; total = `--retries+1`) |
 | `--retry-backoff` | —              | `500ms` (exponential with jitter)             |
 | `--log-format`    | —              | `text` (`text` \| `json`)                     |
@@ -81,7 +81,7 @@ repo-mr-file \
 
 The tool handles one file per invocation. To publish several files into
 one merge/pull request, invoke the binary once per file with the same
-`--tag`, `--branch-name`, and `--target-branch`. The first call POSTs
+`--label`, `--branch-name`, and `--target-branch`. The first call POSTs
 the file and creates the MR/PR; subsequent calls PUT their files onto
 the same branch and reuse the existing MR/PR.
 
@@ -89,7 +89,7 @@ the same branch and reuse the existing MR/PR.
 files=(configs/a.yaml configs/b.yaml configs/c.yaml)
 for f in "${files[@]}"; do
   repo-mr-file \
-    --tag=v1.2.3 \
+    --label=v1.2.3 \
     --platform=gitlab \
     --repo=foo/bar \
     --branch-name=update-v1.2.3 \
@@ -102,8 +102,8 @@ done
 Notes:
 
 - **Commit granularity**: each invocation produces its own commit on
-  the branch (`Update configs/a.yaml to release v1.2.3`,
-  `Update configs/b.yaml to release v1.2.3`, ...). The MR/PR
+  the branch (`Update configs/a.yaml to v1.2.3`,
+  `Update configs/b.yaml to v1.2.3`, ...). The MR/PR
   description is re-templated per invocation; pass `--mr-description`
   to one invocation to pin a single description for the whole MR/PR.
 - **Fail-fast**: if any invocation exits non-zero, the loop stops.
