@@ -3,9 +3,7 @@ package platforms
 import (
 	"context"
 	"io"
-	"math/rand"
 	"sync"
-	"time"
 )
 
 // recordingClient is a Client implementation that records each call and
@@ -150,24 +148,4 @@ func (a *AlwaysFailingClient) ListOpenMR(_ context.Context, _, _, _ string) (*Me
 // CreateMR returns the stored error. See AlwaysFailingClient.
 func (a *AlwaysFailingClient) CreateMR(_ context.Context, _ string, _ CreateMRInput) (*MergeRequest, error) {
 	return nil, a.err
-}
-
-// ---------------------------------------------------------------------------
-// Package-private RNG for jitter, seeded lazily. Tests should pass their own
-// *rand.Rand via RetryConfig.Rand for determinism.
-// ---------------------------------------------------------------------------
-
-var (
-	defaultRandMu  sync.Mutex
-	defaultRandSrc *rand.Rand
-	defaultRandNow = time.Now().UnixNano()
-)
-
-func defaultRandFloat() float64 {
-	defaultRandMu.Lock()
-	defer defaultRandMu.Unlock()
-	if defaultRandSrc == nil {
-		defaultRandSrc = rand.New(rand.NewSource(defaultRandNow))
-	}
-	return defaultRandSrc.Float64()
 }

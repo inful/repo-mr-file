@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -154,4 +155,24 @@ func applyJitter(d time.Duration, jitter float64, r *rand.Rand) time.Duration {
 	}
 	factor := 1.0 + (f*2-1)*jitter
 	return time.Duration(float64(d) * factor)
+}
+
+// ---------------------------------------------------------------------------
+// Package-private RNG for jitter, seeded lazily. Tests should pass their
+// own *rand.Rand via RetryConfig.Rand for determinism.
+// ---------------------------------------------------------------------------
+
+var (
+	defaultRandMu  sync.Mutex
+	defaultRandSrc *rand.Rand
+	defaultRandNow = time.Now().UnixNano()
+)
+
+func defaultRandFloat() float64 {
+	defaultRandMu.Lock()
+	defer defaultRandMu.Unlock()
+	if defaultRandSrc == nil {
+		defaultRandSrc = rand.New(rand.NewSource(defaultRandNow))
+	}
+	return defaultRandSrc.Float64()
 }
