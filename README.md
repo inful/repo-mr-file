@@ -44,8 +44,8 @@ go build -trimpath -ldflags="-s -w" -o dist/repo-mr-file ./cmd/repo-mr-file
 | Platform | API root shape | Auth header | Branch creation | Stale-branch conflict |
 |---|---|---|---|---|
 | GitLab   | `https://host/api/v4` | `PRIVATE-TOKEN: <token>` | implicit via `start_branch` on POST file | 409 |
-| GitHub   | `https://api.github.com` (no API version in path) | `Authorization: Bearer <token>` | implicit via `branch` on PUT file | 422 |
-| Gitea    | `https://host/api/v1` | `Authorization: token <token>` | explicit `POST /branches` first | 422 |
+| GitHub   | `https://api.github.com` (no API version in path) | `Authorization: Bearer <token>` | explicit `POST /git/refs` (bundled by the bundler) | 422 |
+| Gitea    | `https://host/api/v1` | `Authorization: token <token>` | explicit `POST /branches` (bundled by the bundler) | 422 |
 | Forgejo  | same as Gitea (API-compatible fork) | same | same | same |
 
 Pick the platform with `--platform=gitlab\|github\|gitea\|forgejo`. The

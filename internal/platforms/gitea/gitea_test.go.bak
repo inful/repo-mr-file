@@ -191,7 +191,7 @@ func TestGitea_UpdateFile_SendsSHA(t *testing.T) {
 	defer srv.Close()
 
 	c := NewOfficialClient(srv.URL, "test-token")
-	err := c.UpdateFile(context.Background(), "foo/bar", "main", "ca.pem", "main", "msg", "blob-sha-old", strings.NewReader("new"))
+	err := c.UpdateFile(context.Background(), "foo/bar", "main", "ca.pem", "msg", "blob-sha-old", strings.NewReader("new"))
 	if err != nil {
 		t.Fatalf("UpdateFile: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestGitea_UpdateFile_Conflict_ClassifiedAsConflict(t *testing.T) {
 	defer srv.Close()
 
 	c := NewOfficialClient(srv.URL, "test-token")
-	err := c.UpdateFile(context.Background(), "foo/bar", "main", "ca.pem", "main", "msg", "old", strings.NewReader("new"))
+	err := c.UpdateFile(context.Background(), "foo/bar", "main", "ca.pem", "msg", "old", strings.NewReader("new"))
 	if err == nil {
 		t.Fatal("expected error")
 	}

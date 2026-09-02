@@ -28,13 +28,16 @@ func (f *fakeClient) GetProject(context.Context, string) (*platforms.Project, er
 func (f *fakeClient) GetBranch(context.Context, string, string) (bool, error) {
 	return false, f.err
 }
+func (f *fakeClient) CreateBranch(context.Context, string, string, string) error {
+	return f.err
+}
 func (f *fakeClient) GetFile(context.Context, string, string, string) (*platforms.File, error) {
 	return nil, f.err
 }
 func (f *fakeClient) CreateFile(context.Context, string, string, string, string, string, io.Reader) error {
 	return f.err
 }
-func (f *fakeClient) UpdateFile(context.Context, string, string, string, string, string, io.Reader) error {
+func (f *fakeClient) UpdateFile(context.Context, string, string, string, string, string, string, io.Reader) error {
 	return f.err
 }
 func (f *fakeClient) ListOpenMR(context.Context, string, string, string) (*platforms.MergeRequest, error) {
@@ -56,13 +59,16 @@ func (r *recordingProjectClient) GetProject(_ context.Context, _ string) (*platf
 func (r *recordingProjectClient) GetBranch(_ context.Context, _, _ string) (bool, error) {
 	return false, nil
 }
+func (r *recordingProjectClient) CreateBranch(_ context.Context, _, _, _ string) error {
+	return nil
+}
 func (r *recordingProjectClient) GetFile(_ context.Context, _, _, _ string) (*platforms.File, error) {
 	return nil, platforms.New(platforms.KindNotFound, "GetFile", errors.New("not found"))
 }
 func (r *recordingProjectClient) CreateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
 	return nil
 }
-func (r *recordingProjectClient) UpdateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
+func (r *recordingProjectClient) UpdateFile(_ context.Context, _, _, _, _, _, _ string, _ io.Reader) error {
 	return nil
 }
 func (r *recordingProjectClient) ListOpenMR(_ context.Context, _, _, _ string) (*platforms.MergeRequest, error) {
@@ -86,13 +92,16 @@ func (t *transientCounter) GetProject(context.Context, string) (*platforms.Proje
 func (t *transientCounter) GetBranch(context.Context, string, string) (bool, error) {
 	return false, t.err
 }
+func (t *transientCounter) CreateBranch(context.Context, string, string, string) error {
+	return t.err
+}
 func (t *transientCounter) GetFile(context.Context, string, string, string) (*platforms.File, error) {
 	return nil, t.err
 }
 func (t *transientCounter) CreateFile(context.Context, string, string, string, string, string, io.Reader) error {
 	return t.err
 }
-func (t *transientCounter) UpdateFile(context.Context, string, string, string, string, string, io.Reader) error {
+func (t *transientCounter) UpdateFile(context.Context, string, string, string, string, string, string, io.Reader) error {
 	return t.err
 }
 func (t *transientCounter) ListOpenMR(context.Context, string, string, string) (*platforms.MergeRequest, error) {

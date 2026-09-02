@@ -30,6 +30,11 @@ func (d *dryRunClient) GetBranch(_ context.Context, repoPath, branch string) (bo
 	return false, nil
 }
 
+func (d *dryRunClient) CreateBranch(_ context.Context, repoPath, newBranch, startBranch string) error {
+	d.record("CreateBranch", repoPath, newBranch, startBranch)
+	return nil
+}
+
 func (d *dryRunClient) GetFile(_ context.Context, repoPath, filePath, ref string) (*File, error) {
 	d.record("GetFile", repoPath, filePath, ref)
 	// Return a synthetic KindNotFound so the bundler treats the file as
@@ -37,12 +42,12 @@ func (d *dryRunClient) GetFile(_ context.Context, repoPath, filePath, ref string
 	return nil, New(KindNotFound, "GetFile(dry-run)", errors.New("dry-run: file not fetched"))
 }
 
-func (d *dryRunClient) CreateFile(_ context.Context, repoPath, branch, filePath, startBranch, commitMsg string, _ io.Reader) error {
-	d.record("CreateFile", repoPath, branch, filePath, commitMsg, startBranch)
+func (d *dryRunClient) CreateFile(_ context.Context, repoPath, branch, filePath, _, commitMsg string, _ io.Reader) error {
+	d.record("CreateFile", repoPath, branch, filePath, commitMsg)
 	return nil
 }
 
-func (d *dryRunClient) UpdateFile(_ context.Context, repoPath, branch, filePath, commitMsg, lastCommitID string, _ io.Reader) error {
+func (d *dryRunClient) UpdateFile(_ context.Context, repoPath, branch, filePath, _, commitMsg, lastCommitID string, _ io.Reader) error {
 	d.record("UpdateFile", repoPath, branch, filePath, commitMsg, lastCommitID)
 	return nil
 }

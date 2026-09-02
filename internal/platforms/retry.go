@@ -55,6 +55,13 @@ func (r *retryClient) GetBranch(ctx context.Context, repoPath, branch string) (b
 	})
 }
 
+func (r *retryClient) CreateBranch(ctx context.Context, repoPath, newBranch, startBranch string) error {
+	_, err := retryDo(ctx, r.cfg, "CreateBranch", func(ctx context.Context) (struct{}, error) {
+		return struct{}{}, r.inner.CreateBranch(ctx, repoPath, newBranch, startBranch)
+	})
+	return err
+}
+
 func (r *retryClient) GetFile(ctx context.Context, repoPath, filePath, ref string) (*File, error) {
 	return retryDo(ctx, r.cfg, "GetFile", func(ctx context.Context) (*File, error) {
 		return r.inner.GetFile(ctx, repoPath, filePath, ref)
@@ -68,9 +75,9 @@ func (r *retryClient) CreateFile(ctx context.Context, repoPath, branch, filePath
 	return err
 }
 
-func (r *retryClient) UpdateFile(ctx context.Context, repoPath, branch, filePath, commitMsg, lastCommitID string, content io.Reader) error {
+func (r *retryClient) UpdateFile(ctx context.Context, repoPath, branch, filePath, startBranch, commitMsg, lastCommitID string, content io.Reader) error {
 	_, err := retryDo(ctx, r.cfg, "UpdateFile", func(ctx context.Context) (struct{}, error) {
-		return struct{}{}, r.inner.UpdateFile(ctx, repoPath, branch, filePath, commitMsg, lastCommitID, content)
+		return struct{}{}, r.inner.UpdateFile(ctx, repoPath, branch, filePath, startBranch, commitMsg, lastCommitID, content)
 	})
 	return err
 }

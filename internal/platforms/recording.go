@@ -45,6 +45,11 @@ func (r *recordingClient) GetBranch(_ context.Context, repoPath, branch string) 
 	return false, nil
 }
 
+func (r *recordingClient) CreateBranch(_ context.Context, repoPath, newBranch, startBranch string) error {
+	r.record("CreateBranch", repoPath, newBranch, startBranch)
+	return nil
+}
+
 func (r *recordingClient) GetFile(_ context.Context, repoPath, filePath, ref string) (*File, error) {
 	r.record("GetFile", repoPath, filePath, ref)
 	return nil, nil
@@ -55,8 +60,8 @@ func (r *recordingClient) CreateFile(_ context.Context, repoPath, branch, filePa
 	return nil
 }
 
-func (r *recordingClient) UpdateFile(_ context.Context, repoPath, branch, filePath, commitMsg, lastCommitID string, _ io.Reader) error {
-	r.record("UpdateFile", repoPath, branch, filePath, commitMsg, lastCommitID)
+func (r *recordingClient) UpdateFile(_ context.Context, repoPath, branch, filePath, startBranch, commitMsg, lastCommitID string, _ io.Reader) error {
+	r.record("UpdateFile", repoPath, branch, filePath, commitMsg, lastCommitID, startBranch)
 	return nil
 }
 

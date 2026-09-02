@@ -54,6 +54,11 @@ type mockGitLab struct {
 	getFileRef        atomic.Value // string
 	createFileCalls   atomic.Int32
 	createFileContent atomic.Value // []byte
+	createBranchCalls atomic.Int32
+	createBranchReqs  []struct {
+		Branch string `json:"branch"`
+		Ref    string `json:"ref"`
+	}
 	updateFileCalls   atomic.Int32
 	updateFileContent atomic.Value // []byte
 	updateFileLastCID atomic.Value // string
@@ -107,6 +112,20 @@ func (m *mockGitLab) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"name": "branch"})
+
+	case r.Method == http.MethodPost && strings.HasSuffix(path, "/repository/branches"):
+		// CreateBranch: respond 201 with a minimal branch payload.
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			Branch string `json:"branch"`
+			Ref    string `json:"ref"`
+		}
+		_ = json.Unmarshal(body, &req)
+		if req.Branch != "" && req.Ref != "" {
+			m.createBranchCalls.Add(1)
+			m.createBranchReqs = append(m.createBranchReqs, req)
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"name": req.Branch})
 
 	case r.Method == http.MethodGet && strings.Contains(path, "/repository/files/"):
 		m.getFileCalls.Add(1)

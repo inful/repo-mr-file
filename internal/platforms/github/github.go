@@ -9,9 +9,12 @@
 // sha and returns 422 on mismatch (not 409 like GitLab; the platforms
 // layer maps 422 → KindConflict).
 //
-// Branch creation: GitHub's PUT /contents auto-creates the branch when
-// the requested branch doesn't exist, so no separate CreateBranch step
-// is needed (unlike Gitea/Forgejo).
+// Branch creation: the bundler calls CreateBranch via the
+// platforms.Client interface before any file POST. GitHub's PUT
+// /contents auto-creates branches on *empty* repos, but returns
+// "404 Branch not found" on populated repos, so the explicit
+// CreateRef is required for the populated-repo case (which the
+// README oversimplified as "implicit via branch on PUT file").
 //
 // Pull request "head" must be in "user:branch" form. The bundler doesn't
 // know the GitHub user, so the client constructor takes a username
@@ -77,6 +80,27 @@ func splitRepoPath(repoPath string) (owner, repo string, err error) {
 	return parts[0], parts[1], nil
 }
 
+// branchExists reports whether the named ref exists in the repo. It
+// uses Repositories.GetBranch (HEAD: refs/heads/<branch>) and treats
+// 404 as "does not exist". The second return is the SHA when the
+// branch exists, "" otherwise.
+//
+// IMPORTANT: go-github v74's Repositories.GetBranch returns a
+// generic fmt.Errorf on non-200 (not a typed *ErrorResponse), so the
+// status code is read off the *Response header rather than parsed
+// from the error. Other API methods (CreateRef, etc.) DO return
+// *ErrorResponse and are handled by ghError.
+func (c *Client) branchExists(ctx context.Context, owner, repo, branch string) (bool, string, error) {
+	b, resp, err := c.gh.Repositories.GetBranch(ctx, owner, repo, branch, 0)
+	if err == nil {
+		return true, b.GetCommit().GetSHA(), nil
+	}
+	if resp != nil && resp.StatusCode == http.StatusNotFound {
+		return false, "", nil
+	}
+	return false, "", classifyErr("CreateBranch", err)
+}
+
 // ghError extracts the HTTP status and headers from a *gh.ErrorResponse
 // so we can classify it into a typed *platforms.Error. Returns (status,
 // header, true) if err is (or wraps) a GitHub API error response; header
@@ -107,8 +131,57 @@ func classifyErr(op string, err error) error {
 	return &platforms.Error{Kind: platforms.KindTransient, Op: op, Err: err}
 }
 
-// GetProject returns the repository metadata for repoPath (formatted as
-// "owner/repo"). It satisfies platforms.Client.
+// CreateBranch creates refs/heads/<newBranch> at startBranch's SHA
+// via POST /git/refs. Implements the platforms.Client.CreateBranch
+// contract — the bundler invokes this before any file POST to
+// guarantee the target branch exists.
+//
+// IMPORTANT: github.com/google/go-github/v74's Repositories.GetBranch
+// returns a generic fmt.Errorf on non-200 (not a typed *ErrorResponse),
+// so the status code is read off the *Response header rather than
+// parsed from the error. Other API methods (CreateRef, etc.) DO
+// return *ErrorResponse and are handled by ghError.
+func (c *Client) CreateBranch(ctx context.Context, repoPath, newBranch, startBranch string) error {
+	owner, repo, err := splitRepoPath(repoPath)
+	if err != nil {
+		return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateBranch", Err: err}
+	}
+	exists, _, err := c.branchExists(ctx, owner, repo, startBranch)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateBranch",
+			Err: fmt.Errorf("start branch %q not found for branching %q", startBranch, newBranch)}
+	}
+	_, parentSHA, err := c.branchExists(ctx, owner, repo, startBranch)
+	if err != nil || parentSHA == "" {
+		// Should be unreachable (we just asserted existence), but
+		// be defensive.
+		return &platforms.Error{Kind: platforms.KindTransient, Op: "CreateBranch",
+			Err: fmt.Errorf("could not resolve parent SHA for %q", startBranch)}
+	}
+	_, _, err = c.gh.Git.CreateRef(ctx, owner, repo, &gh.Reference{
+		Ref: gh.Ptr("refs/heads/" + newBranch),
+		Object: &gh.GitObject{
+			SHA: gh.Ptr(parentSHA),
+		},
+	})
+	if err != nil {
+		// 422 'Reference already exists' is a successful no-op for our
+		// purposes (some other process created it).
+		status, _, ok := ghError(err)
+		if ok && status == http.StatusUnprocessableEntity {
+			return nil
+		}
+		return classifyErr("CreateBranch", err)
+	}
+	return nil
+}
+
+// GetProject returns repository metadata (id + default_branch) so the
+// bundler can resolve a default target branch when --target-branch
+// was not specified.
 func (c *Client) GetProject(ctx context.Context, repoPath string) (*platforms.Project, error) {
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
@@ -179,18 +252,22 @@ func (c *Client) GetFile(ctx context.Context, repoPath, filePath, ref string) (*
 	}, nil
 }
 
-// CreateFile creates the file at filePath on the given branch, creating
-// the branch implicitly if it doesn't exist. GitHub's PUT /contents
-// auto-creates branches, so no separate CreateBranch call is needed.
+// CreateFile creates the file at filePath on the given branch. The
+// bundler is responsible for ensuring the branch exists (via
+// CreateBranch) before this is called — see the platforms.Client
+// interface comment for why each platform gets its own explicit
+// branch-creation call rather than relying on per-platform
+// auto-create quirks that only work on empty repos.
+//
+// `startBranch` is unused here for symmetry with the platforms.Client
+// interface contract; the bundler hands it to CreateBranch at the
+// right moment.
 func (c *Client) CreateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg string, content io.Reader) error {
-	// startBranch is intentionally ignored: GitHub's PUT /contents
-	// auto-creates the branch when it doesn't exist, so the bundler's
-	// pass-through value isn't needed. Kept in the interface for
-	// platform symmetry with GitLab and Gitea.
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateFile", Err: err}
 	}
+
 	contentBytes, err := io.ReadAll(content)
 	if err != nil {
 		return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateFile", Err: fmt.Errorf("read content: %w", err)}
@@ -210,7 +287,10 @@ func (c *Client) CreateFile(ctx context.Context, repoPath, branch, filePath, _, 
 // UpdateFile updates the file at filePath on branch. lastCommitID is
 // the blob SHA returned by a prior GetFile; if it doesn't match,
 // GitHub returns 422 (mapped to KindConflict at the platforms layer).
-func (c *Client) UpdateFile(ctx context.Context, repoPath, branch, filePath, commitMsg, lastCommitID string, content io.Reader) error {
+//
+// As with CreateFile, the bundler guarantees the target branch
+// exists via CreateBranch beforehand — this method just does the PUT.
+func (c *Client) UpdateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg, lastCommitID string, content io.Reader) error {
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return &platforms.Error{Kind: platforms.KindConfig, Op: "UpdateFile", Err: err}

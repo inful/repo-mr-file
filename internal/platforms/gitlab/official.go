@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 
 	"github.com/inful/repo-mr-file/internal/platforms"
 
@@ -45,13 +46,16 @@ func (e *errClient) GetProject(_ context.Context, _ string) (*platforms.Project,
 func (e *errClient) GetBranch(_ context.Context, _, _ string) (bool, error) {
 	return false, e.err
 }
+func (e *errClient) CreateBranch(_ context.Context, _, _, _ string) error {
+	return e.err
+}
 func (e *errClient) GetFile(_ context.Context, _, _, _ string) (*platforms.File, error) {
 	return nil, e.err
 }
 func (e *errClient) CreateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
 	return e.err
 }
-func (e *errClient) UpdateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
+func (e *errClient) UpdateFile(_ context.Context, _, _, _, _, _, _ string, _ io.Reader) error {
 	return e.err
 }
 func (e *errClient) ListOpenMR(_ context.Context, _, _, _ string) (*platforms.MergeRequest, error) {
@@ -136,7 +140,7 @@ func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, fileP
 	return nil
 }
 
-func (c *officialClient) UpdateFile(ctx context.Context, repoPath, branch, filePath, commitMsg, lastCommitID string, content io.Reader) error {
+func (c *officialClient) UpdateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg, lastCommitID string, content io.Reader) error {
 	contentBytes, err := io.ReadAll(content)
 	if err != nil {
 		return platforms.New(platforms.KindConfig, "UpdateFile", err)
@@ -154,6 +158,36 @@ func (c *officialClient) UpdateFile(ctx context.Context, repoPath, branch, fileP
 		gitlab.WithContext(ctx))
 	if err != nil {
 		return classifyError("UpdateFile", err)
+	}
+	return nil
+}
+
+// CreateBranch creates a new ref via POST /projects/:id/repository/branches
+// using the official client's Branches service. Implements the
+// platforms.Client.CreateBranch contract — called by the bundler
+// before any file POST to ensure the target branch exists. The
+// `startBranch` parameter is the parent ref name (e.g. "main").
+//
+// GitLab's API idempotency: when the branch already exists, the
+// response is 400 with a "Branch already exists" message. We treat
+// that as success because the workflow's goal (ensure the branch
+// exists) is satisfied. The bundler is idempotent at a higher level,
+// so a "Branch already exists" race during a concurrent run is fine.
+func (c *officialClient) CreateBranch(ctx context.Context, repoPath, newBranch, startBranch string) error {
+	_, _, err := c.client.Branches.CreateBranch(repoPath,
+		&gitlab.CreateBranchOptions{
+			Branch: &newBranch,
+			Ref:    &startBranch,
+		},
+		gitlab.WithContext(ctx))
+	if err != nil {
+		// Inspect the underlying error message; the
+		// "already exists" / 400 case is benign here.
+		var er *gitlab.ErrorResponse
+		if errors.As(err, &er) && er.Response.StatusCode == http.StatusBadRequest {
+			return nil
+		}
+		return classifyError("CreateBranch", err)
 	}
 	return nil
 }

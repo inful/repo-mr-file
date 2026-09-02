@@ -94,7 +94,11 @@ func Run(ctx context.Context, deps Deps) (Result, error) {
 	}
 	logger.Info(fmt.Sprintf(logging.MsgUsingTargetBranch, targetBranch))
 
-	// Step 3: source branch.
+	// Step 3: source branch. If our branch doesn't exist yet, each
+	// platform's CreateBranch implementation creates it from targetBranch
+	// (the project's default). This avoids GitHub's "404 Branch not
+	// found" / GitLab's "you can only create files on a branch" errors
+	// on populated repos where PUT /contents/branch can't auto-create.
 	logger.Info(fmt.Sprintf(logging.MsgCheckingBranch, deps.Config.BranchName))
 	branchExists, err := deps.Client.GetBranch(ctx, deps.Config.Repo, deps.Config.BranchName)
 	if err != nil {
@@ -106,6 +110,9 @@ func Run(ctx context.Context, deps Deps) (Result, error) {
 		sourceBranch = deps.Config.BranchName
 	} else {
 		logger.Info(fmt.Sprintf(logging.MsgBranchDoesNotExist, targetBranch))
+		if err := deps.Client.CreateBranch(ctx, deps.Config.Repo, deps.Config.BranchName, targetBranch); err != nil {
+			return Result{}, err
+		}
 	}
 
 	// Step 4: existing MR.
@@ -115,7 +122,7 @@ func Run(ctx context.Context, deps Deps) (Result, error) {
 	}
 
 	// Step 5 + 6: file check + write.
-	writeNeeded, _, err := writeFileIfNeeded(ctx, logger, deps, sourceBranch)
+	writeNeeded, _, err := writeFileIfNeeded(ctx, logger, deps, sourceBranch, targetBranch)
 	if err != nil {
 		return Result{}, err
 	}
@@ -177,7 +184,7 @@ func Run(ctx context.Context, deps Deps) (Result, error) {
 // Note: callers must still call CreateMR when writeNeeded is false but
 // the source branch differs from the target (file matches, no MR yet —
 // we still want the MR).
-func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, sourceBranch string) (writeNeeded bool, lastCommitID string, err error) {
+func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, sourceBranch, targetBranch string) (writeNeeded bool, lastCommitID string, err error) {
 	file, ferr := deps.Client.GetFile(ctx, deps.Config.Repo, deps.Config.TargetPath, sourceBranch)
 	if ferr != nil {
 		if e := platforms.As(ferr); e == nil || e.Kind != platforms.KindNotFound {
@@ -203,10 +210,13 @@ func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, sour
 		return false, "", nil
 	}
 
-	// File exists but differs — PUT.
+	// File exists but differs — PUT. startBranch is unused for the
+	// platforms that already had a way to update (GitHub needs the
+	// branch to exist; the bundler ensured that in step 3 via
+	// CreateBranch).
 	logger.Info(fmt.Sprintf(logging.MsgUpdatingFile, deps.Config.TargetPath, deps.Config.Repo))
 	if uerr := deps.Client.UpdateFile(ctx, deps.Config.Repo,
-		deps.Config.BranchName, deps.Config.TargetPath,
+		deps.Config.BranchName, deps.Config.TargetPath, targetBranch,
 		deps.Config.CommitMessage, file.LastCommitID, bytes.NewReader(deps.Source)); uerr != nil {
 		return false, "", uerr
 	}

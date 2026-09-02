@@ -72,13 +72,16 @@ func (e *errReturningClient) GetProject(context.Context, string) (*platforms.Pro
 func (e *errReturningClient) GetBranch(context.Context, string, string) (bool, error) {
 	return false, &platforms.Error{Kind: platforms.KindConfig, Op: "GetBranch", Err: e.err}
 }
+func (e *errReturningClient) CreateBranch(context.Context, string, string, string) error {
+	return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateBranch", Err: e.err}
+}
 func (e *errReturningClient) GetFile(context.Context, string, string, string) (*platforms.File, error) {
 	return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "GetFile", Err: e.err}
 }
 func (e *errReturningClient) CreateFile(context.Context, string, string, string, string, string, io.Reader) error {
 	return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateFile", Err: e.err}
 }
-func (e *errReturningClient) UpdateFile(context.Context, string, string, string, string, string, io.Reader) error {
+func (e *errReturningClient) UpdateFile(context.Context, string, string, string, string, string, string, io.Reader) error {
 	return &platforms.Error{Kind: platforms.KindConfig, Op: "UpdateFile", Err: e.err}
 }
 func (e *errReturningClient) ListOpenMR(context.Context, string, string, string) (*platforms.MergeRequest, error) {

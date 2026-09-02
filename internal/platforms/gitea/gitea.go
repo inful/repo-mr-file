@@ -197,7 +197,7 @@ func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, fileP
 	return c.do(ctx, http.MethodPost, "/api/v1/repos/"+repoPath+"/contents/"+filePath, body, nil)
 }
 
-func (c *officialClient) UpdateFile(ctx context.Context, repoPath, branch, filePath, commitMsg, lastCommitID string, content io.Reader) error {
+func (c *officialClient) UpdateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg, lastCommitID string, content io.Reader) error {
 	contentBytes, err := io.ReadAll(content)
 	if err != nil {
 		return platforms.New(platforms.KindConfig, "UpdateFile", err)
