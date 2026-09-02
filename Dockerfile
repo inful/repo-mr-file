@@ -15,11 +15,13 @@
 #     buildx pulls the right arch variant automatically.
 #
 # Runtime base:
-#   - gcr.io/distroless/static-debian:nonroot ships ca-certificates
+#   - gcr.io/distroless/static:nonroot ships ca-certificates
 #     (required for TLS to GitHub/GitHub Enterprise/GitLab/Gitea) and
-#     nothing else. Runs as uid 65532 by default.
+#     nothing else. Runs as uid 65532 by default. The older
+#     `:static-debian:nonroot` tag is no longer present on
+#     gcr.io/distroless; use the de-debianized `:static:`.
 
-FROM gcr.io/distroless/static-debian:nonroot AS runtime
+FROM gcr.io/distroless/static:nonroot AS runtime
 
 # Per-platform binary lives at $TARGETPLATFORM/repo-mr-file inside the
 # build context that GoReleaser constructs.
