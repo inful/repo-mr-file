@@ -9,7 +9,7 @@ through a merge request (MR) or pull request (PR).
 
 ## Install
 
-Pre-built binaries (linux/darwin/windows × amd64/arm64):
+Pre-built binaries (linux/darwin × amd64/arm64, windows × amd64):
 
 ```bash
 # Linux/macOS — see the release page for the full per-version URL
@@ -38,7 +38,7 @@ Two image variants are published per release:
 | Tag suffix | Base image | Shell | Size (approx) | Use case |
 |---|---|---|---|---|
 | `:vX.Y.Z` (or `:latest`) | `gcr.io/distroless/static:nonroot` | none | ~5 MB | Production. Default for `docker run` and Kubernetes. |
-| `:vX.Y.Z-debug` (or `:latest-debug`) | `gcr.io/distroless/static:debug-nonroot` | busybox | ~8 MB | CI jobs that want `ls` / `cat` / `env` available alongside the binary, or operators who need `docker exec -it <container> /busybox/sh` for debugging. |
+| `:vX.Y.Z-debug` (or `:latest-debug`) | `gcr.io/distroless/static:debug-nonroot` | busybox | ~6 MB | CI jobs that want `ls` / `cat` / `env` available alongside the binary, or operators who need `docker exec -it <container> /busybox/sh` for debugging. |
 
 The debug image has the same binary, the same `nonroot` UID, the
 same OCI labels, and the same `ENTRYPOINT`. It is a drop-in
@@ -131,6 +131,7 @@ the file and creates the MR/PR; subsequent calls PUT their files onto
 the same branch and reuse the existing MR/PR.
 
 ```bash
+set -e
 files=(configs/a.yaml configs/b.yaml configs/c.yaml)
 for f in "${files[@]}"; do
   repo-mr-file \
@@ -144,6 +145,10 @@ for f in "${files[@]}"; do
 done
 ```
 
+`set -e` makes the loop stop on the first non-zero exit. Without it,
+bash continues to the next iteration, which is rarely what you want
+when one file fails to publish.
+
 Notes:
 
 - **Commit granularity**: each invocation produces its own commit on
@@ -151,9 +156,9 @@ Notes:
   `Update configs/b.yaml to v1.2.3`, ...). The MR/PR
   description is re-templated per invocation; pass `--mr-description`
   to one invocation to pin a single description for the whole MR/PR.
-- **Fail-fast**: if any invocation exits non-zero, the loop stops.
-  Files already uploaded stay on the branch; the operator fixes the
-  cause and re-runs the loop. Later invocations are idempotent —
+- **Fail-fast**: `set -e` makes the loop stop on the first non-zero
+  exit. Files already uploaded stay on the branch; the operator fixes
+  the cause and re-runs the loop. Later invocations are idempotent —
   the tool compares the source against the current file and skips the
   upload when they match.
 - **Idempotency**: re-running a file that already matches its target

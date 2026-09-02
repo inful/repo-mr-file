@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// CLI holds all flags and env-var bindings for the create-bundle-mr binary.
+// CLI holds all flags and env-var bindings for the repo-mr-file binary.
 //
 // Defaults and required fields are expressed via kong struct tags.
 // Templated defaults (e.g. branch name based on --label) are populated by the

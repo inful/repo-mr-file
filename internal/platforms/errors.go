@@ -21,13 +21,17 @@ const (
 	// KindUnknown is the zero value; treat as "no classification available".
 	KindUnknown Kind = iota
 	// KindConfig covers 400-class errors that aren't auth/not-found/conflict
-	// (e.g. 422). Use for input / request-shape mistakes.
+	// (e.g. a bare 400 with a "branch is empty" or "invalid ref" body).
+	// Use for input / request-shape mistakes.
 	KindConfig
 	// KindAuth covers 401 and 403.
 	KindAuth
 	// KindNotFound covers 404.
 	KindNotFound
-	// KindConflict covers 409 (e.g. stale file branch head on UpdateFile).
+	// KindConflict covers 409 (e.g. stale file branch head on UpdateFile)
+	// AND 422, which GitHub and Gitea/Forgejo use to signal the same
+	// condition that GitLab reports as 409. See ClassifyStatus for the
+	// mapping rationale.
 	KindConflict
 	// KindTransient covers 429, 5xx, and network errors — all worth retrying.
 	KindTransient
