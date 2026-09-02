@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/inful/updateext/internal/gitlab"
+	"github.com/inful/gitlab-mr-file/internal/gitlab"
 )
 
 // fakeClient is a Client that returns a fixed Project and a configurable

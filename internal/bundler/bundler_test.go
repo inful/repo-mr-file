@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/inful/updateext/internal/gitlab"
-	"github.com/inful/updateext/internal/logging"
+	"github.com/inful/gitlab-mr-file/internal/gitlab"
+	"github.com/inful/gitlab-mr-file/internal/logging"
 )
 
 // ---------------------------------------------------------------------------

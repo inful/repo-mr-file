@@ -18,9 +18,9 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/inful/updateext/internal/bundler"
-	"github.com/inful/updateext/internal/gitlab"
-	"github.com/inful/updateext/internal/logging"
+	"github.com/inful/gitlab-mr-file/internal/bundler"
+	"github.com/inful/gitlab-mr-file/internal/gitlab"
+	"github.com/inful/gitlab-mr-file/internal/logging"
 )
 
 // exitCodeFromError maps a typed *gitlab.Error to a process exit code, as

@@ -18,8 +18,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/inful/updateext/internal/gitlab"
-	"github.com/inful/updateext/internal/logging"
+	"github.com/inful/gitlab-mr-file/internal/gitlab"
+	"github.com/inful/gitlab-mr-file/internal/logging"
 )
 
 // Config is the subset of CLI fields the bundler needs.

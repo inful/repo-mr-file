@@ -1,4 +1,4 @@
-module github.com/inful/updateext
+module github.com/inful/gitlab-mr-file
 
 go 1.26.7
 
