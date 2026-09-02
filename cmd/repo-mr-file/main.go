@@ -48,7 +48,7 @@ func buildLiveClient(cli *CLI, retryCfg platforms.RetryConfig) platforms.Client 
 		ghc := gogithub.NewClient(httpClient)
 		oc, err := githubplatform.NewClient(ghc, cli.GitHubUser, cli.APIToken, cli.APIBase)
 		if err != nil {
-			return &errReturningClient{err: fmt.Errorf("github: %w", err)}
+			return platforms.NewAlwaysFailingClient(fmt.Errorf("github: %w", err))
 		}
 		return platforms.WithRetry(oc, retryCfg)
 	case "gitea", "forgejo":
@@ -58,37 +58,6 @@ func buildLiveClient(cli *CLI, retryCfg platforms.RetryConfig) platforms.Client 
 		oc := gitlabplatform.NewOfficialClient(cli.APIBase, cli.APIToken)
 		return platforms.WithRetry(oc, retryCfg)
 	}
-}
-
-// errReturningClient is a Client whose every method returns the
-// construction-time error. Used so buildLiveClient failures don't
-// crash the program; the bundler surfaces the error in a normal
-// typed *platforms.Error.
-type errReturningClient struct{ err error }
-
-func (e *errReturningClient) GetProject(context.Context, string) (*platforms.Project, error) {
-	return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "GetProject", Err: e.err}
-}
-func (e *errReturningClient) GetBranch(context.Context, string, string) (bool, error) {
-	return false, &platforms.Error{Kind: platforms.KindConfig, Op: "GetBranch", Err: e.err}
-}
-func (e *errReturningClient) CreateBranch(context.Context, string, string, string) error {
-	return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateBranch", Err: e.err}
-}
-func (e *errReturningClient) GetFile(context.Context, string, string, string) (*platforms.File, error) {
-	return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "GetFile", Err: e.err}
-}
-func (e *errReturningClient) CreateFile(context.Context, string, string, string, string, string, io.Reader) error {
-	return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateFile", Err: e.err}
-}
-func (e *errReturningClient) UpdateFile(context.Context, string, string, string, string, string, string, io.Reader) error {
-	return &platforms.Error{Kind: platforms.KindConfig, Op: "UpdateFile", Err: e.err}
-}
-func (e *errReturningClient) ListOpenMR(context.Context, string, string, string) (*platforms.MergeRequest, error) {
-	return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "ListOpenMR", Err: e.err}
-}
-func (e *errReturningClient) CreateMR(context.Context, string, platforms.CreateMRInput) (*platforms.MergeRequest, error) {
-	return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "CreateMR", Err: e.err}
 }
 
 // exitCodeFromError maps a typed *platforms.Error to a process exit code, as

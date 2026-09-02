@@ -276,31 +276,3 @@ func TestClassifyError(t *testing.T) {
 		})
 	}
 }
-
-func TestErrClient_AllMethodsReturnError(t *testing.T) {
-	sentinel := platforms.New(platforms.KindConfig, "synthetic", errors.New("test error"))
-	ec := &errClient{err: sentinel}
-	ctx := context.Background()
-
-	if _, err := ec.GetProject(ctx, "x"); err == nil || !errors.Is(err, sentinel) {
-		t.Errorf("GetProject = %v, want %v", err, sentinel)
-	}
-	if _, err := ec.GetBranch(ctx, "x", "y"); err == nil || !errors.Is(err, sentinel) {
-		t.Errorf("GetBranch = %v, want %v", err, sentinel)
-	}
-	if _, err := ec.GetFile(ctx, "x", "y", "z"); err == nil || !errors.Is(err, sentinel) {
-		t.Errorf("GetFile = %v, want %v", err, sentinel)
-	}
-	if err := ec.CreateFile(ctx, "x", "y", "z", "main", "m", strings.NewReader("c")); err == nil || !errors.Is(err, sentinel) {
-		t.Errorf("CreateFile = %v, want %v", err, sentinel)
-	}
-	if err := ec.UpdateFile(ctx, "x", "y", "z", "main", "m", "id", strings.NewReader("c")); err == nil || !errors.Is(err, sentinel) {
-		t.Errorf("UpdateFile = %v, want %v", err, sentinel)
-	}
-	if _, err := ec.ListOpenMR(ctx, "x", "y", "z"); err == nil || !errors.Is(err, sentinel) {
-		t.Errorf("ListOpenMR = %v, want %v", err, sentinel)
-	}
-	if _, err := ec.CreateMR(ctx, "x", platforms.CreateMRInput{}); err == nil || !errors.Is(err, sentinel) {
-		t.Errorf("CreateMR = %v, want %v", err, sentinel)
-	}
-}

@@ -16,35 +16,11 @@ import (
 
 // fakeClient is a Client that returns a fixed Project and a configurable
 // error from every method. Used to drive the bundler through error paths
-// without needing a real GitLab server.
-type fakeClient struct {
-	project *platforms.Project
-	err     error
-}
-
-func (f *fakeClient) GetProject(context.Context, string) (*platforms.Project, error) {
-	return f.project, f.err
-}
-func (f *fakeClient) GetBranch(context.Context, string, string) (bool, error) {
-	return false, f.err
-}
-func (f *fakeClient) CreateBranch(context.Context, string, string, string) error {
-	return f.err
-}
-func (f *fakeClient) GetFile(context.Context, string, string, string) (*platforms.File, error) {
-	return nil, f.err
-}
-func (f *fakeClient) CreateFile(context.Context, string, string, string, string, string, io.Reader) error {
-	return f.err
-}
-func (f *fakeClient) UpdateFile(context.Context, string, string, string, string, string, string, io.Reader) error {
-	return f.err
-}
-func (f *fakeClient) ListOpenMR(context.Context, string, string, string) (*platforms.MergeRequest, error) {
-	return nil, f.err
-}
-func (f *fakeClient) CreateMR(context.Context, string, platforms.CreateMRInput) (*platforms.MergeRequest, error) {
-	return nil, f.err
+// without needing a real GitLab server. It just wraps
+// platforms.NewAlwaysFailingClient so the test stays a one-liner; the
+// project field is no longer used (every test sets only err).
+func newFakeClient(err error) platforms.Client {
+	return platforms.NewAlwaysFailingClient(err)
 }
 
 // recordingProjectClient is a Client that records calls and returns
@@ -79,36 +55,24 @@ func (r *recordingProjectClient) CreateMR(_ context.Context, _ string, _ platfor
 }
 
 // transientCounter counts how many times GetProject is called and returns
-// the configured error from every call. Used to assert retry semantics.
+// a transient error from every method. Used to assert retry semantics
+// (1 initial + N retries = N+1 GetProject calls). Embeds
+// *platforms.AlwaysFailingClient to inherit the error-returning
+// behaviour of the other 7 methods, then shadows GetProject to count.
 type transientCounter struct {
+	*platforms.AlwaysFailingClient
 	calls atomic.Int64
-	err   error
 }
 
-func (t *transientCounter) GetProject(context.Context, string) (*platforms.Project, error) {
+func newTransientCounter(err error) *transientCounter {
+	return &transientCounter{
+		AlwaysFailingClient: platforms.NewAlwaysFailingClient(err).(*platforms.AlwaysFailingClient),
+	}
+}
+
+func (t *transientCounter) GetProject(ctx context.Context, s string) (*platforms.Project, error) {
 	t.calls.Add(1)
-	return nil, t.err
-}
-func (t *transientCounter) GetBranch(context.Context, string, string) (bool, error) {
-	return false, t.err
-}
-func (t *transientCounter) CreateBranch(context.Context, string, string, string) error {
-	return t.err
-}
-func (t *transientCounter) GetFile(context.Context, string, string, string) (*platforms.File, error) {
-	return nil, t.err
-}
-func (t *transientCounter) CreateFile(context.Context, string, string, string, string, string, io.Reader) error {
-	return t.err
-}
-func (t *transientCounter) UpdateFile(context.Context, string, string, string, string, string, string, io.Reader) error {
-	return t.err
-}
-func (t *transientCounter) ListOpenMR(context.Context, string, string, string) (*platforms.MergeRequest, error) {
-	return nil, t.err
-}
-func (t *transientCounter) CreateMR(context.Context, string, platforms.CreateMRInput) (*platforms.MergeRequest, error) {
-	return nil, t.err
+	return t.AlwaysFailingClient.GetProject(ctx, s)
 }
 
 // stubRunDeps builds a temp bundle file and returns args that point run() at it.
@@ -145,7 +109,7 @@ func TestRun_ExitCodeMapping(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			fake := &fakeClient{err: platforms.New(tc.kind, "GetProject", errors.New("synthetic"))}
+			fake := newFakeClient(platforms.New(tc.kind, "GetProject", errors.New("synthetic")))
 			var stdout, stderr bytes.Buffer
 			got := run(args, &stdout, &stderr, fake)
 			if got != tc.wantCode {
@@ -215,7 +179,7 @@ func TestRun_BundleFileMissing_Exit2(t *testing.T) {
 }
 
 func TestRun_RetriesSemantics(t *testing.T) {
-	fc := &transientCounter{err: platforms.New(platforms.KindTransient, "GetProject", errors.New("503"))}
+	fc := newTransientCounter(platforms.New(platforms.KindTransient, "GetProject", errors.New("503")))
 	args, _ := stubRunDeps(t)
 	args = append(args, "--retries=3")
 
@@ -235,7 +199,7 @@ func TestRun_PlatformFlag_Accepted(t *testing.T) {
 			// Use an injected client so the platform-specific factory
 			// never actually talks to a network — we only care that
 			// kong accepts the flag (and the dispatch doesn't panic).
-			fc := &transientCounter{err: platforms.New(platforms.KindTransient, "GetProject", errors.New("503"))}
+			fc := newTransientCounter(platforms.New(platforms.KindTransient, "GetProject", errors.New("503")))
 			args, _ := stubRunDeps(t)
 			args = append(args, "--platform="+p, "--api-base=http://127.0.0.1:1")
 			var stdout, stderr bytes.Buffer
@@ -251,7 +215,7 @@ func TestRun_PlatformFlag_Accepted(t *testing.T) {
 // routes through the existing GitLab factory (i.e. the default branch).
 // We pass clientOverride so no real HTTP call is attempted.
 func TestRun_PlatformFlag_DefaultIsGitlab(t *testing.T) {
-	fc := &transientCounter{err: platforms.New(platforms.KindTransient, "GetProject", errors.New("503"))}
+	fc := newTransientCounter(platforms.New(platforms.KindTransient, "GetProject", errors.New("503")))
 	args, _ := stubRunDeps(t)
 	got := run(args, &stdoutOrDiscard{}, &stderrOrDiscard{}, fc)
 	if got == 0 {

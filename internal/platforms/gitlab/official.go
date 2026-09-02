@@ -28,41 +28,9 @@ func NewOfficialClient(baseURL, token string) platforms.Client {
 	if err != nil {
 		// NewClient only fails if the URL is malformed; surface as a
 		// persistent error wrapped in a Client that always returns it.
-		return &errClient{err: platforms.New(platforms.KindConfig, "NewOfficialClient", err)}
+		return platforms.NewAlwaysFailingClient(platforms.New(platforms.KindConfig, "NewOfficialClient", err))
 	}
 	return &officialClient{client: client}
-}
-
-// errClient is a Client that returns a fixed error from every method. It
-// is used when the underlying official client fails to construct so that
-// the caller still sees a well-typed error.
-type errClient struct {
-	err error
-}
-
-func (e *errClient) GetProject(_ context.Context, _ string) (*platforms.Project, error) {
-	return nil, e.err
-}
-func (e *errClient) GetBranch(_ context.Context, _, _ string) (bool, error) {
-	return false, e.err
-}
-func (e *errClient) CreateBranch(_ context.Context, _, _, _ string) error {
-	return e.err
-}
-func (e *errClient) GetFile(_ context.Context, _, _, _ string) (*platforms.File, error) {
-	return nil, e.err
-}
-func (e *errClient) CreateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
-	return e.err
-}
-func (e *errClient) UpdateFile(_ context.Context, _, _, _, _, _, _ string, _ io.Reader) error {
-	return e.err
-}
-func (e *errClient) ListOpenMR(_ context.Context, _, _, _ string) (*platforms.MergeRequest, error) {
-	return nil, e.err
-}
-func (e *errClient) CreateMR(_ context.Context, _ string, _ platforms.CreateMRInput) (*platforms.MergeRequest, error) {
-	return nil, e.err
 }
 
 type officialClient struct {
