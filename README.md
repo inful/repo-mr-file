@@ -86,7 +86,7 @@ repo-mr-file \
 | `--api-token`     | `API_TOKEN`    | (required)                                    |
 | `--platform`      | —              | `gitlab` (`gitlab` \| `github` \| `gitea` \| `forgejo`) |
 | `--github-user`   | —              | (required when `--platform=github`; the GitHub handle that owns the token, used to format PR `head` as `user:branch`) |
-| `--api-base`      | `API_BASE`     | `https://gitlab.mgmlab.net/api/v4` (GitLab default; for GitHub use `https://api.github.com`, for Gitea/Forgejo use `https://host/api/v1`) |
+| `--api-base`      | `API_BASE`     | `https://gitlab.com/api/v4` (GitLab SaaS default; for GitHub use `https://api.github.com`, for Gitea/Forgejo use `https://host/api/v1`, for self-hosted GitLab set `API_BASE` to your instance URL) |
 | `--api-url`       | `API_URL`      | derived from `--api-base` (strips `/api/v4` / `/api/v3` / `/api/v1`) |
 | `--target-branch` | `TARGET_BRANCH`| project default branch                        |
 | `--branch-name`   | —              | `update-${LABEL}`                             |

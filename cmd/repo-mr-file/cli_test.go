@@ -124,7 +124,7 @@ func TestCLI_Defaults(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t, validArgs(bundle)...)
 
-	if got, want := cli.APIBase, "https://gitlab.mgmlab.net/api/v4"; got != want {
+	if got, want := cli.APIBase, "https://gitlab.com/api/v4"; got != want {
 		t.Errorf("APIBase = %q, want default %q", got, want)
 	}
 	if got, want := cli.Retries, 3; got != want {
@@ -187,7 +187,7 @@ func TestCLI_AfterApplyAPIURLDerived(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t, validArgs(bundle)...)
 
-	if got, want := cli.APIURL, "https://gitlab.mgmlab.net"; got != want {
+	if got, want := cli.APIURL, "https://gitlab.com"; got != want {
 		t.Errorf("APIURL = %q, want %q (derived from default APIBase)", got, want)
 	}
 }

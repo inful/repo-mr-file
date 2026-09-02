@@ -21,7 +21,7 @@ type CLI struct {
 	SourcePath string `required:"" name:"source-path" help:"Local path to the source file."`
 
 	// Platform connection (works for gitlab, github, gitea, forgejo).
-	APIBase  string `default:"https://gitlab.mgmlab.net/api/v4" env:"API_BASE" name:"api-base" help:"Platform API base URL (e.g. https://host/api/v4 for GitLab, https://api.github.com for GitHub, https://host/api/v1 for Gitea/Forgejo)."`
+	APIBase  string `default:"https://gitlab.com/api/v4" env:"API_BASE" name:"api-base" help:"Platform API base URL (e.g. https://host/api/v4 for GitLab, https://api.github.com for GitHub, https://host/api/v1 for Gitea/Forgejo)."`
 	APIURL   string `env:"API_URL" name:"api-url" help:"Platform web URL (defaults to --api-base minus the API suffix)."`
 	APIToken string `required:"" env:"API_TOKEN" name:"api-token" help:"Platform API token with the required scopes (api for GitLab, repo for GitHub, repo for Gitea/Forgejo)."`
 
