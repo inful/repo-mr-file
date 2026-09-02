@@ -1,9 +1,9 @@
-// Package bundler orchestrates the 8-step workflow that creates or updates
-// a GitLab merge request which delivers an updated CA certificate bundle
-// to an external repository.
+// Package bundler orchestrates the 7-step platform-agnostic workflow that
+// creates or updates a file in a GitLab, GitHub, Gitea, or Forgejo repository
+// and ensures an open merge/pull request exists for that change.
 //
 // The public Run entry point accepts a Deps value (Client, Logger, Config,
-// Bundle, DryRun) and returns a Result plus a typed error. All API calls
+// Source, DryRun) and returns a Result plus a typed error. All API calls
 // go through the Client interface, which is wrapped by WithRetry at the
 // caller. The mock httptest server in bundler_test.go exercises every
 // branch end-to-end.
@@ -216,6 +216,9 @@ func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, sour
 // that records every call without making real requests, and logs each
 // intended step.
 func runDry(ctx context.Context, logger *slog.Logger, deps Deps) (Result, error) {
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
 	logger.Info(fmt.Sprintf(logging.MsgGettingProjectInfo, deps.Config.Repo))
 	logger.Info(fmt.Sprintf(logging.MsgCheckingBranch, deps.Config.BranchName))
 	logger.Info(fmt.Sprintf(logging.MsgBranchDoesNotExist, deps.Config.TargetBranch))

@@ -434,6 +434,22 @@ func TestRun_DryRun_NoNetworkCalls(t *testing.T) {
 	}
 }
 
+func TestRun_DryRun_NilLoggerDoesNotPanic(t *testing.T) {
+	mock := newMockGitLab(t)
+	deps := stubDeps(t, mock, []byte("bundle"), defaultConfig())
+	deps.DryRun = true
+	deps.Logger = nil // explicitly nil — should not panic
+	deps.Client = platforms.NewDryRunClient()
+
+	res, err := Run(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !res.DryRun {
+		t.Error("DryRun = false, want true")
+	}
+}
+
 func TestRun_TargetBranchFromProjectDefault(t *testing.T) {
 	mock := newMockGitLab(t)
 	mock.projectDefaultBranch = "develop"

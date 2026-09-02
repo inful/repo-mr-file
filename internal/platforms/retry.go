@@ -92,9 +92,6 @@ func (r *retryClient) CreateMR(ctx context.Context, repoPath string, in CreateMR
 // without per-method boilerplate.
 func retryDo[T any](ctx context.Context, cfg RetryConfig, op string, fn func(context.Context) (T, error)) (T, error) {
 	var zero T
-	if cfg.MaxAttempts <= 0 {
-		cfg.MaxAttempts = 1
-	}
 
 	var lastErr error
 	delay := cfg.InitialBackoff

@@ -208,20 +208,16 @@ func (c *officialClient) UpdateFile(ctx context.Context, repoPath, branch, fileP
 func (c *officialClient) ListOpenMR(ctx context.Context, repoPath, sourceBranch, targetBranch string) (*platforms.MergeRequest, error) {
 	// Gitea has a dedicated lookup-by-base-head endpoint. 404 → no match.
 	path := "/api/v1/repos/" + repoPath + "/pulls/" + url.PathEscape(targetBranch) + "/" + url.PathEscape(sourceBranch)
-	err := c.do(ctx, http.MethodGet, path, nil, nil)
-	if err != nil {
-		if e := platforms.As(err); e != nil && e.Kind == platforms.KindNotFound {
-			return nil, nil
-		}
-		return nil, err
-	}
-	// 200: re-fetch the full PR list to read the body.
 	var prs []struct {
 		ID      int    `json:"id"`
 		Number  int    `json:"number"`
 		HTMLURL string `json:"html_url"`
 	}
-	if err := c.do(ctx, http.MethodGet, path, nil, &prs); err != nil {
+	err := c.do(ctx, http.MethodGet, path, nil, &prs)
+	if err != nil {
+		if e := platforms.As(err); e != nil && e.Kind == platforms.KindNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	if len(prs) == 0 {

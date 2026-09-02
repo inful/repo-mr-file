@@ -5,22 +5,22 @@ import (
 	"io"
 )
 
-// Project is the subset of gitlab.Project needed by the bundler.
+// Project is the subset of the platform project response needed by the bundler.
 type Project struct {
 	ID            int
 	DefaultBranch string
 	WebURL        string
 }
 
-// File describes a file in a GitLab repository along with the last commit
-// that touched it. Content is the raw (base64-decoded) bytes.
+// File describes a file in a repository along with the last commit that
+// touched it. Content is the raw (base64-decoded) bytes.
 type File struct {
 	Path         string
 	Content      []byte
 	LastCommitID string
 }
 
-// MergeRequest describes a GitLab merge request.
+// MergeRequest describes an open merge request (GitLab) or pull request (GitHub).
 type MergeRequest struct {
 	IID          int
 	SourceBranch string
@@ -38,8 +38,9 @@ type CreateMRInput struct {
 	Description  string
 }
 
-// Client is the interface the bundler uses to talk to GitLab. Implementations
-// include OfficialClient (production) and recordingClient (--dry-run and tests).
+// Client is the interface the bundler uses to talk to any supported platform
+// (GitLab, GitHub, Gitea, Forgejo). Platform-specific implementations are
+// in sub-packages; this package provides retry, recording, and dry-run wrappers.
 type Client interface {
 	GetProject(ctx context.Context, repoPath string) (*Project, error)
 	GetBranch(ctx context.Context, repoPath, branch string) (exists bool, err error)

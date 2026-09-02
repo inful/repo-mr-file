@@ -1,4 +1,4 @@
-// Package logging configures the slog logger used by create-bundle-mr.
+// Package logging configures the slog logger used by repo-mr-file.
 //
 // The bash script this binary replaces emits specific echo lines that
 // operators may grep for in CI logs. The Msg* constants here capture those

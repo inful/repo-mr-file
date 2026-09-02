@@ -1,12 +1,6 @@
-// Package gitlab wraps the official GitLab client with retry, typed errors,
-// and a recording implementation used for --dry-run mode.
-//
-// The Client interface is the only contract the bundler depends on. Two
-// implementations ship in this package:
-//
-//   - OfficialClient wraps gitlab.com/gitlab-org/api/client-go.
-//   - RecordingClient records the calls and returns nil values; used by
-//     --dry-run and in unit tests.
+// Package platforms provides typed errors, retry logic, a recording client,
+// and a dry-run stub. The Client interface is the only contract the bundler
+// depends on; per-platform implementations live in sub-packages.
 //
 // A WithRetry wrapper decorates any Client with the configured retry policy
 // (5xx / 429 / network errors only, with exponential backoff and jitter).
