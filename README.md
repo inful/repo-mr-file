@@ -50,6 +50,45 @@ gitlab-mr-file \
 | `--verbose`       | —              | `false`                                       |
 | `--dry-run`       | —              | `false`                                       |
 
+## Publishing multiple files
+
+The tool handles one file per invocation. To publish several files into
+one merge request, invoke the binary once per file with the same
+`--tag`, `--branch-name`, and `--target-branch`. The first call POSTs
+the file and creates the MR; subsequent calls PUT their files onto the
+same branch and reuse the existing MR.
+
+```bash
+files=(configs/a.yaml configs/b.yaml configs/c.yaml)
+for f in "${files[@]}"; do
+  gitlab-mr-file \
+    --tag=v1.2.3 \
+    --repo=foo/bar \
+    --branch-name=update-v1.2.3 \
+    --target-branch=main \
+    --target-path="$f" \
+    --source-path="./local/$f"
+done
+```
+
+Notes:
+
+- **Commit granularity**: each invocation produces its own commit on
+  the branch (`Update configs/a.yaml to release v1.2.3`,
+  `Update configs/b.yaml to release v1.2.3`, ...). The MR description
+  is re-templated per invocation; pass `--mr-description` to one
+  invocation to pin a single description for the whole MR.
+- **Fail-fast**: if any invocation exits non-zero, the loop stops.
+  Files already uploaded stay on the branch; the operator fixes the
+  cause and re-runs the loop. Later invocations are idempotent —
+  the tool compares the source against the current file and skips the
+  upload when they match.
+- **Idempotency**: re-running a file that already matches its target
+  is a no-op (no commit, no MR change).
+- **Ordering**: invoke files in dependency order; commits land in
+  invocation order.
+
+
 ## Exit codes
 
 | Code | Meaning                                            |
