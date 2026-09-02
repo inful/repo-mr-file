@@ -77,26 +77,31 @@ func splitRepoPath(repoPath string) (owner, repo string, err error) {
 	return parts[0], parts[1], nil
 }
 
-// ghError extracts the HTTP status from a *gh.ErrorResponse so we can
-// classify it into a typed *platforms.Error. Returns (status, true) if
-// err is (or wraps) a GitHub API error response.
-func ghError(err error) (int, bool) {
+// ghError extracts the HTTP status and headers from a *gh.ErrorResponse
+// so we can classify it into a typed *platforms.Error. Returns (status,
+// header, true) if err is (or wraps) a GitHub API error response; header
+// is the underlying response header (used for Retry-After parsing).
+func ghError(err error) (int, http.Header, bool) {
 	var ghErr *gh.ErrorResponse
 	if errors.As(err, &ghErr) && ghErr.Response != nil {
-		return ghErr.Response.StatusCode, true
+		return ghErr.Response.StatusCode, ghErr.Response.Header, true
 	}
-	return 0, false
+	return 0, nil, false
 }
 
 // classifyErr maps a Go-github error into a typed *platforms.Error.
 func classifyErr(op string, err error) error {
-	if status, ok := ghError(err); ok {
-		return &platforms.Error{
+	if status, hdr, ok := ghError(err); ok {
+		out := &platforms.Error{
 			Kind:       platforms.ClassifyStatus(status),
 			Op:         op,
 			Err:        err,
 			StatusCode: status,
 		}
+		if hdr != nil {
+			out.RetryAfter = platforms.RetryAfterFromHeader(hdr)
+		}
+		return out
 	}
 	// Network or unexpected error → transient so the bundler retries.
 	return &platforms.Error{Kind: platforms.KindTransient, Op: op, Err: err}
@@ -137,7 +142,7 @@ func (c *Client) GetBranch(ctx context.Context, repoPath, branch string) (bool, 
 	if resp != nil && resp.StatusCode == http.StatusNotFound {
 		return false, nil
 	}
-	if status, ok := ghError(err); ok && status == http.StatusNotFound {
+	if status, _, ok := ghError(err); ok && status == http.StatusNotFound {
 		return false, nil
 	}
 	return false, classifyErr("GetBranch", err)
@@ -158,7 +163,7 @@ func (c *Client) GetFile(ctx context.Context, repoPath, filePath, ref string) (*
 		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			return nil, &platforms.Error{Kind: platforms.KindNotFound, Op: "GetFile", Err: err, StatusCode: http.StatusNotFound}
 		}
-		if status, ok := ghError(err); ok && status == http.StatusNotFound {
+		if status, _, ok := ghError(err); ok && status == http.StatusNotFound {
 			return nil, &platforms.Error{Kind: platforms.KindNotFound, Op: "GetFile", Err: err, StatusCode: status}
 		}
 		return nil, classifyErr("GetFile", err)

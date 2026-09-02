@@ -55,17 +55,19 @@ repo-mr-file \
 
 …or rely on env vars for the values that have them:
 
+**Required flags** (the first five rows are mandatory):
+
 | Flag              | Env var        | Default                                       |
 |-------------------|----------------|-----------------------------------------------|
 | `--label`         | —              | (required; any identifier — release version, date, change name) |
 | `--repo`          | —              | (required)                                    |
 | `--target-path`   | —              | (required)                                    |
 | `--source-path`   | —              | (required)                                    |
+| `--api-token`     | `API_TOKEN`    | (required)                                    |
 | `--platform`      | —              | `gitlab` (`gitlab` \| `github` \| `gitea` \| `forgejo`) |
 | `--github-user`   | —              | (required when `--platform=github`; the GitHub handle that owns the token, used to format PR `head` as `user:branch`) |
 | `--api-base`      | `API_BASE`     | `https://gitlab.mgmlab.net/api/v4` (GitLab default; for GitHub use `https://api.github.com`, for Gitea/Forgejo use `https://host/api/v1`) |
 | `--api-url`       | `API_URL`      | derived from `--api-base` (strips `/api/v4` / `/api/v3` / `/api/v1`) |
-| `--api-token`     | `API_TOKEN`    | (required)                                    |
 | `--target-branch` | `TARGET_BRANCH`| project default branch                        |
 | `--branch-name`   | —              | `update-${LABEL}`                             |
 | `--commit-message`| —              | `Update ${TARGET_PATH} to ${LABEL}`           |
@@ -143,14 +145,15 @@ open":
 2. Resolve the target project (ID + default branch).
 3. Decide which branch to push from: a per-update branch if it exists,
    otherwise the target branch.
-4. Look up an existing open MR/PR for that source/target pair and
-   reuse it on retries.
+4. Look up an existing open MR/PR for that source/target pair.
 5. Read the current target file. If it already matches the source,
    skip the write but still ensure the MR/PR exists. If it's missing,
    POST the new file. If it differs, PUT with the platform's blob
    SHA so stale-branch conflicts surface as a typed conflict error.
-6. Create the MR/PR if none exists; if the create fails with 422
-   (a concurrent run beat us to it), re-list and reuse.
+6. Create the MR/PR if none exists. On **GitHub and Gitea/Forgejo** a
+   422 response (concurrent MR was created) re-lists and reuses; on
+   **GitLab** the equivalent condition is a 409 response, which the
+   platforms layer maps to `KindConflict` (no automatic re-list).
 
 The defaults are deliberately generic so the tool doesn't bake in any
 one project's conventions. Override `--branch-name`, `--commit-message`,
@@ -163,8 +166,10 @@ replaces:
   arguments.
 - Typed JSON parsing via official platform clients (or hand-rolled
   `net/http` for Gitea/Forgejo).
-- 5xx / 429 responses retry with exponential backoff; `Retry-After`
-  honored.
+- 5xx / 429 responses retry with exponential backoff. When the server
+  supplies a `Retry-After` header (RFC 7231 §7.1.3, supporting both
+  delta-seconds and HTTP-date forms), that value is honored instead
+  of the backoff, capped at 60 seconds.
 - Stale-branch conflicts surface as a typed conflict (exit 5) on
   every platform.
 - Distinct exit codes so CI can branch on the failure class.

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // Kind classifies an error so the caller can map it to a process exit code.
@@ -61,6 +62,11 @@ type Error struct {
 	Op         string // the operation that failed (e.g. "GetProject")
 	Err        error  // underlying cause
 	StatusCode int    // HTTP status code, 0 if not applicable
+	// RetryAfter is the server-supplied wait hint (parsed from the
+	// Retry-After header on transient-class responses). 0 means "no
+	// hint; use the configured exponential backoff". WithRetry honors
+	// this value (capped at MaxRetryAfter) instead of the backoff.
+	RetryAfter time.Duration
 }
 
 func (e *Error) Error() string {

@@ -202,6 +202,12 @@ func (c *officialClient) CreateMR(ctx context.Context, repoPath string, in platf
 // *platforms.Error carrying the appropriate Kind. Special handling for
 // ErrNotFound (the official client returns this for 404s without an
 // embedded response) and for net.Error (any transient network failure).
+//
+// When the error wraps a *gitlab.ErrorResponse, the response header is
+// consulted for Retry-After and that value (capped at
+// platforms.MaxRetryAfter) is carried on the typed error so retryDo
+// waits the server-suggested interval instead of the configured
+// exponential backoff.
 func classifyError(op string, err error) error {
 	if err == nil {
 		return nil
@@ -215,7 +221,11 @@ func classifyError(op string, err error) error {
 	if errors.As(err, &er) {
 		status := er.Response.StatusCode
 		kind := platforms.ClassifyStatus(status)
-		return &platforms.Error{Kind: kind, Op: op, Err: err, StatusCode: status}
+		out := &platforms.Error{Kind: kind, Op: op, Err: err, StatusCode: status}
+		if er.Response != nil {
+			out.RetryAfter = platforms.RetryAfterFromHeader(er.Response.Header)
+		}
+		return out
 	}
 	var ne net.Error
 	if errors.As(err, &ne) {

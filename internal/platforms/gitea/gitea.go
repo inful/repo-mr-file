@@ -92,6 +92,7 @@ func (c *officialClient) do(ctx context.Context, method, path string, body, v an
 		Op:         method + " " + path,
 		Err:        fmt.Errorf("status %d: %s", resp.StatusCode, string(respBody)),
 		StatusCode: resp.StatusCode,
+		RetryAfter: platforms.RetryAfterFromHeader(resp.Header),
 	}
 }
 

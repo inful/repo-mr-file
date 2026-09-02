@@ -111,9 +111,16 @@ func retryDo[T any](ctx context.Context, cfg RetryConfig, op string, fn func(con
 		if attempt == cfg.MaxAttempts {
 			break
 		}
+		// Prefer the server-supplied Retry-After hint over our backoff
+		// when present — servers often use it to communicate quota
+		// resets that we cannot otherwise know. Skip jitter on a hint
+		// since the server has stated a specific moment.
 		actualDelay := applyJitter(delay, cfg.Jitter, cfg.Rand)
+		if e.RetryAfter > 0 {
+			actualDelay = e.RetryAfter // already capped at MaxRetryAfter
+		}
 		if cfg.Logger != nil {
-			cfg.Logger.DebugContext(ctx, "retrying gitlab request",
+			cfg.Logger.DebugContext(ctx, "retrying platform request",
 				"op", op, "attempt", attempt, "delay", actualDelay, "err", err.Error())
 		}
 		select {
