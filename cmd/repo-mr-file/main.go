@@ -15,15 +15,78 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/alecthomas/kong"
+	gogithub "github.com/google/go-github/v74/github"
 
 	"github.com/inful/repo-mr-file/internal/bundler"
 	"github.com/inful/repo-mr-file/internal/logging"
 	"github.com/inful/repo-mr-file/internal/platforms"
+	giteaplatform "github.com/inful/repo-mr-file/internal/platforms/gitea"
+	githubplatform "github.com/inful/repo-mr-file/internal/platforms/github"
 	gitlabplatform "github.com/inful/repo-mr-file/internal/platforms/gitlab"
 )
+
+// buildLiveClient constructs the platform-specific Client based on
+// --platform and wraps it with the configured retry policy. The
+// returned client satisfies platforms.Client.
+//
+//   - gitlab:   uses the GitLab official Go client
+//   - github:   uses google/go-github; needs a GitHub username for PR
+//     "head" formatting (--github-user, required for github)
+//   - gitea:    uses net/http against the Gitea REST API
+//   - forgejo:  same as gitea (API-compatible fork)
+func buildLiveClient(cli *CLI, retryCfg platforms.RetryConfig) platforms.Client {
+	// Short HTTP timeout so tests against unreachable URLs fail fast
+	// and CI doesn't hang on transient network errors.
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	switch cli.Platform {
+	case "github":
+		ghc := gogithub.NewClient(httpClient)
+		oc, err := githubplatform.NewClient(ghc, cli.GitHubUser, cli.APIToken, cli.APIBase)
+		if err != nil {
+			return &errReturningClient{err: fmt.Errorf("github: %w", err)}
+		}
+		return platforms.WithRetry(oc, retryCfg)
+	case "gitea", "forgejo":
+		oc := giteaplatform.NewOfficialClient(cli.APIBase, cli.APIToken)
+		return platforms.WithRetry(oc, retryCfg)
+	default: // "gitlab"
+		oc := gitlabplatform.NewOfficialClient(cli.APIBase, cli.APIToken)
+		return platforms.WithRetry(oc, retryCfg)
+	}
+}
+
+// errReturningClient is a Client whose every method returns the
+// construction-time error. Used so buildLiveClient failures don't
+// crash the program; the bundler surfaces the error in a normal
+// typed *platforms.Error.
+type errReturningClient struct{ err error }
+
+func (e *errReturningClient) GetProject(context.Context, string) (*platforms.Project, error) {
+	return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "GetProject", Err: e.err}
+}
+func (e *errReturningClient) GetBranch(context.Context, string, string) (bool, error) {
+	return false, &platforms.Error{Kind: platforms.KindConfig, Op: "GetBranch", Err: e.err}
+}
+func (e *errReturningClient) GetFile(context.Context, string, string, string) (*platforms.File, error) {
+	return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "GetFile", Err: e.err}
+}
+func (e *errReturningClient) CreateFile(context.Context, string, string, string, string, io.Reader) error {
+	return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateFile", Err: e.err}
+}
+func (e *errReturningClient) UpdateFile(context.Context, string, string, string, string, string, io.Reader) error {
+	return &platforms.Error{Kind: platforms.KindConfig, Op: "UpdateFile", Err: e.err}
+}
+func (e *errReturningClient) ListOpenMR(context.Context, string, string, string) (*platforms.MergeRequest, error) {
+	return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "ListOpenMR", Err: e.err}
+}
+func (e *errReturningClient) CreateMR(context.Context, string, platforms.CreateMRInput) (*platforms.MergeRequest, error) {
+	return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "CreateMR", Err: e.err}
+}
 
 // exitCodeFromError maps a typed *platforms.Error to a process exit code, as
 // documented in the README exit-code table. Unknown kinds return 7
@@ -93,8 +156,7 @@ func run(args []string, stdout, stderr io.Writer, clientOverride platforms.Clien
 	case cli.DryRun:
 		client = platforms.NewDryRunClient()
 	default:
-		oc := gitlabplatform.NewOfficialClient(cli.APIBase, cli.APIToken)
-		client = platforms.WithRetry(oc, retryCfg)
+		client = buildLiveClient(&cli, retryCfg)
 	}
 
 	deps := bundler.Deps{

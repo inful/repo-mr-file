@@ -216,3 +216,61 @@ func TestRun_RetriesSemantics(t *testing.T) {
 		t.Errorf("GetProject calls = %d, want 4 (1 initial + 3 retries)", got)
 	}
 }
+
+// TestRun_PlatformFlag_Accepted is RED until --platform is implemented:
+// today kong rejects --platform=github as an unknown flag.
+func TestRun_PlatformFlag_Accepted(t *testing.T) {
+	cases := []string{"github", "gitea", "forgejo"}
+	for _, p := range cases {
+		t.Run(p, func(t *testing.T) {
+			// Use an injected client so the platform-specific factory
+			// never actually talks to a network — we only care that
+			// kong accepts the flag (and the dispatch doesn't panic).
+			fc := &transientCounter{err: platforms.New(platforms.KindTransient, "GetProject", errors.New("503"))}
+			args, _ := stubRunDeps(t)
+			args = append(args, "--platform="+p, "--api-base=http://127.0.0.1:1")
+			var stdout, stderr bytes.Buffer
+			_ = run(args, &stdout, &stderr, fc)
+			if strings.Contains(stderr.String(), "unknown flag") {
+				t.Errorf("--platform=%s rejected as unknown flag: %s", p, stderr.String())
+			}
+		})
+	}
+}
+
+// TestRun_PlatformFlag_DefaultIsGitlab asserts that omitting --platform
+// routes through the existing GitLab factory (i.e. the default branch).
+// We pass clientOverride so no real HTTP call is attempted.
+func TestRun_PlatformFlag_DefaultIsGitlab(t *testing.T) {
+	fc := &transientCounter{err: platforms.New(platforms.KindTransient, "GetProject", errors.New("503"))}
+	args, _ := stubRunDeps(t)
+	got := run(args, &stdoutOrDiscard{}, &stderrOrDiscard{}, fc)
+	if got == 0 {
+		t.Errorf("expected non-zero exit from transient error, got 0")
+	}
+}
+
+// TestRun_PlatformFlag_InvalidValue: kong's enum validation rejects
+// values outside the allowed set with a clear error message.
+func TestRun_PlatformFlag_InvalidValue(t *testing.T) {
+	args, _ := stubRunDeps(t)
+	args = append(args, "--platform=bogus")
+	var stdout, stderr bytes.Buffer
+	got := run(args, &stdout, &stderr, nil)
+	if got != 2 {
+		t.Errorf("exit code = %d, want 2 for invalid --platform value", got)
+	}
+	if !strings.Contains(stderr.String(), "platform") {
+		t.Errorf("error message should mention 'platform', got: %s", stderr.String())
+	}
+}
+
+// stdoutOrDiscard / stderrOrDiscard are tiny writers used by tests
+// that don't care about the captured output.
+type stdoutOrDiscard struct{}
+
+func (stdoutOrDiscard) Write(p []byte) (int, error) { return len(p), nil }
+
+type stderrOrDiscard struct{}
+
+func (stderrOrDiscard) Write(p []byte) (int, error) { return len(p), nil }

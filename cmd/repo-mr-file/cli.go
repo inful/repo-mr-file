@@ -43,6 +43,14 @@ type CLI struct {
 	Verbose   bool   `help:"Enable debug logging."`
 	DryRun    bool   `name:"dry-run" help:"Log intended API calls without making any."`
 
+	// Platform selection.
+	Platform string `default:"gitlab" enum:"gitlab,github,gitea,forgejo" name:"platform" help:"Target platform (gitlab, github, gitea, forgejo). forgejo reuses the gitea client."`
+	// GitHubUser is required when --platform=github; the bundler needs
+	// the GitHub handle that owns the token to format PR "head" fields
+	// as "user:branch" (the format GitHub requires). Ignored for other
+	// platforms.
+	GitHubUser string `name:"github-user" help:"GitHub handle that owns the token (required when --platform=github)."`
+
 	// Logger is populated by the caller after parsing; not a flag.
 	Logger *slog.Logger `kong:"-"`
 }
