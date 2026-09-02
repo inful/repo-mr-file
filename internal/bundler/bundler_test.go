@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -540,7 +539,3 @@ func TestRun_LoggerLogsBashMirroringLines(t *testing.T) {
 		}
 	}
 }
-
-// keep imports referenced if a future edit removes some uses
-var _ = os.Getenv
-var _ slog.Handler = (*slog.JSONHandler)(nil)
