@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/inful/repo-mr-file/internal/logging"
 	"github.com/inful/repo-mr-file/internal/platforms"
 	gitlabplatform "github.com/inful/repo-mr-file/internal/platforms/gitlab"
 )
@@ -198,7 +197,7 @@ func stubDeps(t *testing.T, mock *mockGitLab, bundle []byte, config Config) Deps
 	client := platforms.WithRetry(oc, platforms.RetryConfig{MaxAttempts: 1, InitialBackoff: time.Microsecond})
 	return Deps{
 		Client: client,
-		Logger: logging.New(io.Discard, "text", false),
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Config: config,
 		Source: bundle,
 		DryRun: false,
@@ -510,7 +509,7 @@ func TestRun_NoDefaultBranch_ReturnsError(t *testing.T) {
 func TestRun_LoggerLogsBashMirroringLines(t *testing.T) {
 	mock := newMockGitLab(t)
 	var buf bytes.Buffer
-	logger := logging.New(&buf, "text", false)
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
 
 	oc := gitlabplatform.NewOfficialClient(mock.URL()+"/api/v4", "test-token")
 	deps := Deps{

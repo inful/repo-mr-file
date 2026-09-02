@@ -15,15 +15,16 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/alecthomas/kong"
 	gogithub "github.com/google/go-github/v74/github"
 
 	"github.com/inful/repo-mr-file/internal/bundler"
-	"github.com/inful/repo-mr-file/internal/logging"
 	"github.com/inful/repo-mr-file/internal/platforms"
 	giteaplatform "github.com/inful/repo-mr-file/internal/platforms/gitea"
 	githubplatform "github.com/inful/repo-mr-file/internal/platforms/github"
@@ -104,7 +105,23 @@ func run(args []string, stdout, stderr io.Writer, clientOverride platforms.Clien
 		return 2
 	}
 
-	logger := logging.New(stderr, cli.LogFormat, cli.Verbose)
+	// Configure slog with the chosen format and verbosity. Verbose
+	// gates debug-level emissions; the format is "text" (default) or
+	// "json". This used to live in internal/logging as New() — the
+	// wrapper was 12 lines wrapping a 6-line slog call, so it moved
+	// in here.
+	level := slog.LevelInfo
+	if cli.Verbose {
+		level = slog.LevelDebug
+	}
+	handlerOpts := &slog.HandlerOptions{Level: level}
+	var handler slog.Handler
+	if strings.EqualFold(cli.LogFormat, "json") {
+		handler = slog.NewJSONHandler(stderr, handlerOpts)
+	} else {
+		handler = slog.NewTextHandler(stderr, handlerOpts)
+	}
+	logger := slog.New(handler)
 
 	// Read the source file.
 	source, err := os.ReadFile(cli.SourcePath)

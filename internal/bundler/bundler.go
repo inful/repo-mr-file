@@ -18,8 +18,32 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/inful/repo-mr-file/internal/logging"
 	"github.com/inful/repo-mr-file/internal/platforms"
+)
+
+// Log message templates. The bash script this binary replaces emitted
+// specific echo lines that operators may grep for in CI logs; these
+// constants capture those lines verbatim so callers can format them
+// with fmt.Sprintf. Keep them stable — the README documents the
+// expected log output for each step.
+//
+// These used to live in a dedicated internal/logging package; they
+// moved here because only the bundler emits them.
+const (
+	msgGettingProjectInfo = "Getting project info for %s..."
+	msgFoundProjectID     = "Found project ID: %d"
+	msgUsingTargetBranch  = "Using target branch: %s"
+	msgCheckingBranch     = "Checking if branch %s exists..."
+	msgBranchExists       = "Branch exists, will update existing branch"
+	msgBranchDoesNotExist = "Branch does not exist, will create from %s..."
+	msgBundleMatches      = "%s already matches the source bundle"
+	msgUpdatingFile       = "Updating %s in %s..."
+	msgCreatingFile       = "Creating %s in %s..."
+	msgFileUpdated        = "✓ File %s completed in branch %s"
+	msgCreatingMR         = "Creating merge request..."
+	msgMRCreated          = "✓ Merge request created: %s"
+	msgExistingMR         = "✓ Existing MR: %s"
+	msgNoUpdateNeeded     = "✓ No update or merge request is needed"
 )
 
 // Config is the subset of CLI fields the bundler needs.
@@ -86,12 +110,12 @@ func Run(ctx context.Context, deps Deps) (result Result, err error) {
 	}()
 
 	// Step 1: project.
-	logger.Info(fmt.Sprintf(logging.MsgGettingProjectInfo, deps.Config.Repo))
+	logger.Info(fmt.Sprintf(msgGettingProjectInfo, deps.Config.Repo))
 	proj, err := deps.Client.GetProject(ctx, deps.Config.Repo)
 	if err != nil {
 		return Result{}, err
 	}
-	logger.Info(fmt.Sprintf(logging.MsgFoundProjectID, proj.ID))
+	logger.Info(fmt.Sprintf(msgFoundProjectID, proj.ID))
 
 	// Step 2: target branch.
 	targetBranch := deps.Config.TargetBranch
@@ -102,24 +126,24 @@ func Run(ctx context.Context, deps Deps) (result Result, err error) {
 		return Result{}, platforms.New(platforms.KindConfig, "Run",
 			errors.New("project has no default branch and --target-branch was not set"))
 	}
-	logger.Info(fmt.Sprintf(logging.MsgUsingTargetBranch, targetBranch))
+	logger.Info(fmt.Sprintf(msgUsingTargetBranch, targetBranch))
 
 	// Step 3: source branch. If our branch doesn't exist yet, each
 	// platform's CreateBranch implementation creates it from targetBranch
 	// (the project's default). This avoids GitHub's "404 Branch not
 	// found" / GitLab's "you can only create files on a branch" errors
 	// on populated repos where PUT /contents/branch can't auto-create.
-	logger.Info(fmt.Sprintf(logging.MsgCheckingBranch, deps.Config.BranchName))
+	logger.Info(fmt.Sprintf(msgCheckingBranch, deps.Config.BranchName))
 	branchExists, err := deps.Client.GetBranch(ctx, deps.Config.Repo, deps.Config.BranchName)
 	if err != nil {
 		return Result{}, err
 	}
 	sourceBranch := targetBranch
 	if branchExists {
-		logger.Info(logging.MsgBranchExists)
+		logger.Info(msgBranchExists)
 		sourceBranch = deps.Config.BranchName
 	} else {
-		logger.Info(fmt.Sprintf(logging.MsgBranchDoesNotExist, targetBranch))
+		logger.Info(fmt.Sprintf(msgBranchDoesNotExist, targetBranch))
 		if err := deps.Client.CreateBranch(ctx, deps.Config.Repo, deps.Config.BranchName, targetBranch); err != nil {
 			return Result{}, err
 		}
@@ -143,11 +167,11 @@ func Run(ctx context.Context, deps Deps) (result Result, err error) {
 	// the MR (without writing the file).
 	if !writeNeeded {
 		if existingMR != nil {
-			logger.Info(fmt.Sprintf(logging.MsgExistingMR, existingMR.WebURL))
+			logger.Info(fmt.Sprintf(msgExistingMR, existingMR.WebURL))
 			return Result{Skipped: true, MRURL: existingMR.WebURL}, nil
 		}
 		if sourceBranch == targetBranch {
-			logger.Info(logging.MsgNoUpdateNeeded)
+			logger.Info(msgNoUpdateNeeded)
 			return Result{Skipped: true}, nil
 		}
 		// else: file matches but source != target and no MR — fall
@@ -158,7 +182,7 @@ func Run(ctx context.Context, deps Deps) (result Result, err error) {
 	if existingMR != nil {
 		return Result{MRURL: existingMR.WebURL}, nil
 	}
-	logger.Info(logging.MsgCreatingMR)
+	logger.Info(msgCreatingMR)
 	mr, err := deps.Client.CreateMR(ctx, deps.Config.Repo, platforms.CreateMRInput{
 		SourceBranch: deps.Config.BranchName,
 		TargetBranch: targetBranch,
@@ -171,13 +195,13 @@ func Run(ctx context.Context, deps Deps) (result Result, err error) {
 		if e := platforms.As(err); e != nil && e.StatusCode == http.StatusUnprocessableEntity {
 			retryMR, listErr := deps.Client.ListOpenMR(ctx, deps.Config.Repo, deps.Config.BranchName, targetBranch)
 			if listErr == nil && retryMR != nil {
-				logger.Info(fmt.Sprintf(logging.MsgExistingMR, retryMR.WebURL))
+				logger.Info(fmt.Sprintf(msgExistingMR, retryMR.WebURL))
 				return Result{MRURL: retryMR.WebURL}, nil
 			}
 		}
 		return Result{}, err
 	}
-	logger.Info(fmt.Sprintf(logging.MsgMRCreated, mr.WebURL))
+	logger.Info(fmt.Sprintf(msgMRCreated, mr.WebURL))
 	return Result{MRURL: mr.WebURL}, nil
 }
 
@@ -203,18 +227,18 @@ func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, sour
 		// File does not exist — POST it. Pass sourceBranch (the
 		// parent) as startBranch so platforms that require it
 		// (GitLab) can auto-create the new branch atomically.
-		logger.Info(fmt.Sprintf(logging.MsgCreatingFile, deps.Config.TargetPath, deps.Config.Repo))
+		logger.Info(fmt.Sprintf(msgCreatingFile, deps.Config.TargetPath, deps.Config.Repo))
 		if cerr := deps.Client.CreateFile(ctx, deps.Config.Repo,
 			deps.Config.BranchName, deps.Config.TargetPath, sourceBranch,
 			deps.Config.CommitMessage, bytes.NewReader(deps.Source)); cerr != nil {
 			return false, "", cerr
 		}
-		logger.Info(fmt.Sprintf(logging.MsgFileUpdated, "POST", deps.Config.BranchName))
+		logger.Info(fmt.Sprintf(msgFileUpdated, "POST", deps.Config.BranchName))
 		return true, "", nil
 	}
 
 	if bytes.Equal(file.Content, deps.Source) {
-		logger.Info(fmt.Sprintf(logging.MsgBundleMatches, deps.Config.TargetPath))
+		logger.Info(fmt.Sprintf(msgBundleMatches, deps.Config.TargetPath))
 		// File matches; caller decides whether to short-circuit or to
 		// still create an MR (which is the caller's responsibility).
 		return false, "", nil
@@ -224,12 +248,12 @@ func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, sour
 	// platforms that already had a way to update (GitHub needs the
 	// branch to exist; the bundler ensured that in step 3 via
 	// CreateBranch).
-	logger.Info(fmt.Sprintf(logging.MsgUpdatingFile, deps.Config.TargetPath, deps.Config.Repo))
+	logger.Info(fmt.Sprintf(msgUpdatingFile, deps.Config.TargetPath, deps.Config.Repo))
 	if uerr := deps.Client.UpdateFile(ctx, deps.Config.Repo,
 		deps.Config.BranchName, deps.Config.TargetPath, targetBranch,
 		deps.Config.CommitMessage, file.LastCommitID, bytes.NewReader(deps.Source)); uerr != nil {
 		return false, "", uerr
 	}
-	logger.Info(fmt.Sprintf(logging.MsgFileUpdated, "PUT", deps.Config.BranchName))
+	logger.Info(fmt.Sprintf(msgFileUpdated, "PUT", deps.Config.BranchName))
 	return true, file.LastCommitID, nil
 }
