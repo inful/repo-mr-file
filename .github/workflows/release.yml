@@ -60,6 +60,29 @@ jobs:
           go-version: '1.26'
           cache: true
 
+      # Set up buildx with the docker-container driver so multi-arch
+      # image builds (linux/amd64 + linux/arm64) work end-to-end. The
+      # default `docker` driver GitHub Actions ships is single-platform
+      # only and fails with 'Multi-platform build is not supported for
+      # the docker driver'. The docker-container driver routes each
+      # build through a dedicated BuildKit container.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=moby/buildkit:v0.18.1
+
+      # Authenticate the built-in container registry login helper to
+      # GHCR. GoReleaser doesn't authenticate itself; it expects the
+      # runner to have already logged in via `docker login`. With
+      # GITHUB_TOKEN provided, buildx writes the credentials file
+      # before the goreleaser step runs.
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
