@@ -36,6 +36,18 @@ default is `gitlab`. `--api-base` / `--api-token` work for all four.
 ```bash
 repo-mr-file \
   --tag=v1.2.3 \
+  --platform=github \
+  --github-user=octocat \
+  --repo=octocat/hello \
+  --target-path=docs/ips.txt \
+  --source-path=./local/ips.txt
+```
+
+Or for GitLab (the default platform):
+
+```bash
+repo-mr-file \
+  --tag=v1.2.3 \
   --repo=some-group/some-project \
   --target-path=path/inside/repo/some-file.txt \
   --source-path=/local/path/to/source-file.txt
@@ -50,7 +62,8 @@ repo-mr-file \
 | `--target-path`   | —              | (required)                                    |
 | `--source-path`   | —              | (required)                                    |
 | `--platform`      | —              | `gitlab` (`gitlab` \| `github` \| `gitea` \| `forgejo`) |
-| `--api-base`      | `API_BASE`     | `https://gitlab.mgmlab.net/api/v4`            |
+| `--github-user`   | —              | (required when `--platform=github`; the GitHub handle that owns the token, used to format PR `head` as `user:branch`) |
+| `--api-base`      | `API_BASE`     | `https://gitlab.mgmlab.net/api/v4` (GitLab default; for GitHub use `https://api.github.com`, for Gitea/Forgejo use `https://host/api/v1`) |
 | `--api-url`       | `API_URL`      | derived from `--api-base` (strips `/api/v4` / `/api/v3` / `/api/v1`) |
 | `--api-token`     | `API_TOKEN`    | (required)                                    |
 | `--target-branch` | `TARGET_BRANCH`| project default branch                        |
@@ -77,6 +90,7 @@ files=(configs/a.yaml configs/b.yaml configs/c.yaml)
 for f in "${files[@]}"; do
   repo-mr-file \
     --tag=v1.2.3 \
+    --platform=gitlab \
     --repo=foo/bar \
     --branch-name=update-v1.2.3 \
     --target-branch=main \
