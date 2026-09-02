@@ -190,12 +190,12 @@ func TestWithRetry_DelegatesToInner(t *testing.T) {
 	_, _ = c.CreateMR(ctx, "foo/bar", CreateMRInput{})
 
 	want := []string{"GetProject", "GetBranch", "GetFile", "CreateFile", "UpdateFile", "ListOpenMR", "CreateMR"}
-	if len(inner.calls) != len(want) {
-		t.Fatalf("inner.calls = %+v, want %d calls", inner.calls, len(want))
+	if len(inner.recorded) != len(want) {
+		t.Fatalf("inner.recorded = %+v, want %d calls", inner.recorded, len(want))
 	}
 	for i, m := range want {
-		if inner.calls[i].method != m {
-			t.Errorf("call[%d].method = %q, want %q", i, inner.calls[i].method, m)
+		if inner.recorded[i].method != m {
+			t.Errorf("call[%d].method = %q, want %q", i, inner.recorded[i].method, m)
 		}
 	}
 }

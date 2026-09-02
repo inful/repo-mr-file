@@ -9,8 +9,8 @@ import (
 // recordingClient is a Client implementation that records each call and
 // returns nil values. It powers --dry-run mode and unit tests.
 type recordingClient struct {
-	mu    sync.Mutex
-	calls []recordedCall
+	mu       sync.Mutex
+	recorded []recordedCall
 }
 
 type recordedCall struct {
@@ -18,19 +18,10 @@ type recordedCall struct {
 	args   []any
 }
 
-// Calls returns a snapshot of recorded calls in the order they happened.
-func (r *recordingClient) Calls() []recordedCall {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	out := make([]recordedCall, len(r.calls))
-	copy(out, r.calls)
-	return out
-}
-
 func (r *recordingClient) record(method string, args ...any) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.calls = append(r.calls, recordedCall{method: method, args: args})
+	r.recorded = append(r.recorded, recordedCall{method: method, args: args})
 }
 
 func (r *recordingClient) GetProject(_ context.Context, repoPath string) (*Project, error) {

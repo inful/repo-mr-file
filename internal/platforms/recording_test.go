@@ -19,13 +19,13 @@ func TestRecordingClient_RecordsCalls(t *testing.T) {
 	_, _ = r.ListOpenMR(ctx, "foo/bar", "src", "tgt")
 	_, _ = r.CreateMR(ctx, "foo/bar", CreateMRInput{SourceBranch: "src", TargetBranch: "tgt", Title: "t", Description: "d"})
 
-	if len(r.calls) != 7 {
-		t.Fatalf("len(calls) = %d, want 7", len(r.calls))
+	if len(r.recorded) != 7 {
+		t.Fatalf("len(recorded) = %d, want 7", len(r.recorded))
 	}
 	wantMethods := []string{"GetProject", "GetBranch", "GetFile", "CreateFile", "UpdateFile", "ListOpenMR", "CreateMR"}
 	for i, want := range wantMethods {
-		if r.calls[i].method != want {
-			t.Errorf("call[%d].method = %q, want %q", i, r.calls[i].method, want)
+		if r.recorded[i].method != want {
+			t.Errorf("call[%d].method = %q, want %q", i, r.recorded[i].method, want)
 		}
 	}
 }
