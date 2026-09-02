@@ -16,6 +16,20 @@ on:
 permissions:
   contents: write
 
+# Prevent the classic tag-push race: GitHub Actions occasionally
+# fires the workflow twice for a single `git push origin vX.Y.Z`,
+# and a second goreleaser run would try to re-create the release /
+# re-upload the same assets and 422-fail on every upload.
+#
+# `concurrency` serializes runs on the same ref: any later push of
+# the same tag waits for the current run to finish before starting.
+# We deliberately leave cancel-in-progress at its default (false) so
+# an in-flight release is never cancelled — losing a half-built
+# release is worse than a queued duplicate.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   goreleaser-release:
     name: Build & publish release
