@@ -183,10 +183,12 @@ func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, sour
 		if e := platforms.As(ferr); e == nil || e.Kind != platforms.KindNotFound {
 			return false, "", ferr
 		}
-		// File does not exist — POST it.
+		// File does not exist — POST it. Pass sourceBranch (the
+		// parent) as startBranch so platforms that require it
+		// (GitLab) can auto-create the new branch atomically.
 		logger.Info(fmt.Sprintf(logging.MsgCreatingFile, deps.Config.TargetPath, deps.Config.Repo))
 		if cerr := deps.Client.CreateFile(ctx, deps.Config.Repo,
-			deps.Config.BranchName, deps.Config.TargetPath,
+			deps.Config.BranchName, deps.Config.TargetPath, sourceBranch,
 			deps.Config.CommitMessage, bytes.NewReader(deps.Source)); cerr != nil {
 			return false, "", cerr
 		}
@@ -240,6 +242,7 @@ func runDry(ctx context.Context, logger *slog.Logger, deps Deps) (Result, error)
 	logger.Info(fmt.Sprintf(logging.MsgCreatingFile, deps.Config.TargetPath, deps.Config.Repo))
 	if err := deps.Client.CreateFile(ctx, deps.Config.Repo,
 		deps.Config.BranchName, deps.Config.TargetPath,
+		deps.Config.TargetBranch, // startBranch (parent) for fresh branches
 		deps.Config.CommitMessage, bytes.NewReader(deps.Source)); err != nil {
 		return Result{}, err
 	}

@@ -75,7 +75,7 @@ func (e *errReturningClient) GetBranch(context.Context, string, string) (bool, e
 func (e *errReturningClient) GetFile(context.Context, string, string, string) (*platforms.File, error) {
 	return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "GetFile", Err: e.err}
 }
-func (e *errReturningClient) CreateFile(context.Context, string, string, string, string, io.Reader) error {
+func (e *errReturningClient) CreateFile(context.Context, string, string, string, string, string, io.Reader) error {
 	return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateFile", Err: e.err}
 }
 func (e *errReturningClient) UpdateFile(context.Context, string, string, string, string, string, io.Reader) error {

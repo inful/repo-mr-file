@@ -182,7 +182,11 @@ func (c *Client) GetFile(ctx context.Context, repoPath, filePath, ref string) (*
 // CreateFile creates the file at filePath on the given branch, creating
 // the branch implicitly if it doesn't exist. GitHub's PUT /contents
 // auto-creates branches, so no separate CreateBranch call is needed.
-func (c *Client) CreateFile(ctx context.Context, repoPath, branch, filePath, commitMsg string, content io.Reader) error {
+func (c *Client) CreateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg string, content io.Reader) error {
+	// startBranch is intentionally ignored: GitHub's PUT /contents
+	// auto-creates the branch when it doesn't exist, so the bundler's
+	// pass-through value isn't needed. Kept in the interface for
+	// platform symmetry with GitLab and Gitea.
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateFile", Err: err}

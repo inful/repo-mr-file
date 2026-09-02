@@ -50,8 +50,8 @@ func (r *recordingClient) GetFile(_ context.Context, repoPath, filePath, ref str
 	return nil, nil
 }
 
-func (r *recordingClient) CreateFile(_ context.Context, repoPath, branch, filePath, commitMsg string, _ io.Reader) error {
-	r.record("CreateFile", repoPath, branch, filePath, commitMsg)
+func (r *recordingClient) CreateFile(_ context.Context, repoPath, branch, filePath, startBranch, commitMsg string, _ io.Reader) error {
+	r.record("CreateFile", repoPath, branch, filePath, commitMsg, startBranch)
 	return nil
 }
 

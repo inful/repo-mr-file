@@ -13,7 +13,7 @@ func TestRecordingClient_RecordsCalls(t *testing.T) {
 	_, _ = r.GetProject(ctx, "foo/bar")
 	_, _ = r.GetBranch(ctx, "foo/bar", "main")
 	_, _ = r.GetFile(ctx, "foo/bar", "ca.pem", "main")
-	_ = r.CreateFile(ctx, "foo/bar", "branch", "ca.pem", "commit", strings.NewReader("content"))
+	_ = r.CreateFile(ctx, "foo/bar", "branch", "ca.pem", "main", "commit", strings.NewReader("content"))
 	_ = r.UpdateFile(ctx, "foo/bar", "branch", "ca.pem", "commit", "lastid", strings.NewReader("content"))
 	_, _ = r.ListOpenMR(ctx, "foo/bar", "src", "tgt")
 	_, _ = r.CreateMR(ctx, "foo/bar", CreateMRInput{SourceBranch: "src", TargetBranch: "tgt", Title: "t", Description: "d"})
@@ -42,7 +42,7 @@ func TestRecordingClient_AllMethodsReturnNilNoError(t *testing.T) {
 	if f, err := r.GetFile(ctx, "x", "y", "z"); err != nil || f != nil {
 		t.Errorf("GetFile = (%v, %v), want (nil, nil)", f, err)
 	}
-	if err := r.CreateFile(ctx, "x", "y", "z", "msg", strings.NewReader("c")); err != nil {
+	if err := r.CreateFile(ctx, "x", "y", "z", "main", "msg", strings.NewReader("c")); err != nil {
 		t.Errorf("CreateFile err = %v, want nil", err)
 	}
 	if err := r.UpdateFile(ctx, "x", "y", "z", "msg", "id", strings.NewReader("c")); err != nil {

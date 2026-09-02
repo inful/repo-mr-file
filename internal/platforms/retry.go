@@ -61,9 +61,9 @@ func (r *retryClient) GetFile(ctx context.Context, repoPath, filePath, ref strin
 	})
 }
 
-func (r *retryClient) CreateFile(ctx context.Context, repoPath, branch, filePath, commitMsg string, content io.Reader) error {
+func (r *retryClient) CreateFile(ctx context.Context, repoPath, branch, filePath, startBranch, commitMsg string, content io.Reader) error {
 	_, err := retryDo(ctx, r.cfg, "CreateFile", func(ctx context.Context) (struct{}, error) {
-		return struct{}{}, r.inner.CreateFile(ctx, repoPath, branch, filePath, commitMsg, content)
+		return struct{}{}, r.inner.CreateFile(ctx, repoPath, branch, filePath, startBranch, commitMsg, content)
 	})
 	return err
 }

@@ -31,7 +31,7 @@ func (f *fakeClient) GetBranch(context.Context, string, string) (bool, error) {
 func (f *fakeClient) GetFile(context.Context, string, string, string) (*platforms.File, error) {
 	return nil, f.err
 }
-func (f *fakeClient) CreateFile(context.Context, string, string, string, string, io.Reader) error {
+func (f *fakeClient) CreateFile(context.Context, string, string, string, string, string, io.Reader) error {
 	return f.err
 }
 func (f *fakeClient) UpdateFile(context.Context, string, string, string, string, string, io.Reader) error {
@@ -59,7 +59,7 @@ func (r *recordingProjectClient) GetBranch(_ context.Context, _, _ string) (bool
 func (r *recordingProjectClient) GetFile(_ context.Context, _, _, _ string) (*platforms.File, error) {
 	return nil, platforms.New(platforms.KindNotFound, "GetFile", errors.New("not found"))
 }
-func (r *recordingProjectClient) CreateFile(_ context.Context, _, _, _, _ string, _ io.Reader) error {
+func (r *recordingProjectClient) CreateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
 	return nil
 }
 func (r *recordingProjectClient) UpdateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
@@ -89,7 +89,7 @@ func (t *transientCounter) GetBranch(context.Context, string, string) (bool, err
 func (t *transientCounter) GetFile(context.Context, string, string, string) (*platforms.File, error) {
 	return nil, t.err
 }
-func (t *transientCounter) CreateFile(context.Context, string, string, string, string, io.Reader) error {
+func (t *transientCounter) CreateFile(context.Context, string, string, string, string, string, io.Reader) error {
 	return t.err
 }
 func (t *transientCounter) UpdateFile(context.Context, string, string, string, string, string, io.Reader) error {

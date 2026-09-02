@@ -162,7 +162,7 @@ func TestOfficialClient_CreateFile_SendsBase64(t *testing.T) {
 	defer srv.Close()
 
 	c := NewOfficialClient(srv.URL+"/api/v4", "test-token")
-	if err := c.CreateFile(context.Background(), "foo/bar", "branch", "ca.pem", "msg", strings.NewReader("hello")); err != nil {
+	if err := c.CreateFile(context.Background(), "foo/bar", "branch", "ca.pem", "main", "msg", strings.NewReader("hello")); err != nil {
 		t.Fatalf("CreateFile: %v", err)
 	}
 	body, _ := seenBody.Load().(string)
@@ -291,7 +291,7 @@ func TestErrClient_AllMethodsReturnError(t *testing.T) {
 	if _, err := ec.GetFile(ctx, "x", "y", "z"); err == nil || !errors.Is(err, sentinel) {
 		t.Errorf("GetFile = %v, want %v", err, sentinel)
 	}
-	if err := ec.CreateFile(ctx, "x", "y", "z", "m", strings.NewReader("c")); err == nil || !errors.Is(err, sentinel) {
+	if err := ec.CreateFile(ctx, "x", "y", "z", "main", "m", strings.NewReader("c")); err == nil || !errors.Is(err, sentinel) {
 		t.Errorf("CreateFile = %v, want %v", err, sentinel)
 	}
 	if err := ec.UpdateFile(ctx, "x", "y", "z", "m", "id", strings.NewReader("c")); err == nil || !errors.Is(err, sentinel) {

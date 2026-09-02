@@ -157,21 +157,27 @@ func (c *officialClient) CreateBranch(ctx context.Context, repoPath, newBranch, 
 	return err
 }
 
-func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, filePath, commitMsg string, content io.Reader) error {
+func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, filePath, startBranch, commitMsg string, content io.Reader) error {
 	// Gitea doesn't auto-create the branch on POST /contents. If the
-	// branch doesn't exist, create it from the target branch first.
+	// branch doesn't exist, create it from the parent first. The
+	// bundler passes the project's default branch as startBranch.
 	exists, err := c.GetBranch(ctx, repoPath, branch)
 	if err != nil {
 		return err
 	}
 	if !exists {
-		// Best-effort: derive the source branch as the target branch by
-		// calling GetProject. If we can't resolve it, fall back to the
-		// default branch; if even that fails, return the error.
-		targetBranch := branch
-		proj, perr := c.GetProject(ctx, repoPath)
-		if perr == nil && proj.DefaultBranch != "" {
-			targetBranch = proj.DefaultBranch
+		// Fallback chain: bundler-supplied startBranch (project
+		// default branch) wins; otherwise look it up via GetProject.
+		targetBranch := startBranch
+		if targetBranch == "" {
+			proj, perr := c.GetProject(ctx, repoPath)
+			if perr == nil {
+				targetBranch = proj.DefaultBranch
+			}
+		}
+		if targetBranch == "" {
+			return platforms.New(platforms.KindConfig, "CreateFile",
+				fmt.Errorf("cannot derive parent branch for fresh branch %q", branch))
 		}
 		if err := c.CreateBranch(ctx, repoPath, branch, targetBranch); err != nil {
 			return err

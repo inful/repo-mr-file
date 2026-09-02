@@ -48,7 +48,7 @@ func (e *errClient) GetBranch(_ context.Context, _, _ string) (bool, error) {
 func (e *errClient) GetFile(_ context.Context, _, _, _ string) (*platforms.File, error) {
 	return nil, e.err
 }
-func (e *errClient) CreateFile(_ context.Context, _, _, _, _ string, _ io.Reader) error {
+func (e *errClient) CreateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
 	return e.err
 }
 func (e *errClient) UpdateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
@@ -107,20 +107,28 @@ func (c *officialClient) GetFile(ctx context.Context, repoPath, filePath, ref st
 	}, nil
 }
 
-func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, filePath, commitMsg string, content io.Reader) error {
+func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, filePath, startBranch, commitMsg string, content io.Reader) error {
 	contentBytes, err := io.ReadAll(content)
 	if err != nil {
 		return platforms.New(platforms.KindConfig, "CreateFile", err)
 	}
 	encoded := base64.StdEncoding.EncodeToString(contentBytes)
 	encoding := "base64"
-	_, _, err = c.client.RepositoryFiles.CreateFile(repoPath, filePath,
-		&gitlab.CreateFileOptions{
-			Branch:        &branch,
-			Encoding:      &encoding,
-			Content:       &encoded,
-			CommitMessage: &commitMsg,
-		},
+	opts := &gitlab.CreateFileOptions{
+		Branch:        &branch,
+		Encoding:      &encoding,
+		Content:       &encoded,
+		CommitMessage: &commitMsg,
+	}
+	// startBranch is the parent branch to fork from when GitLab
+	// auto-creates the target branch on POST /repository/files.
+	// Without it, GitLab returns HTTP 400 ("You can only create or
+	// edit files when you are on a branch") for a fresh branch.
+	// Bundlers pass target branch (main/master/develop) here.
+	if startBranch != "" {
+		opts.StartBranch = &startBranch
+	}
+	_, _, err = c.client.RepositoryFiles.CreateFile(repoPath, filePath, opts,
 		gitlab.WithContext(ctx))
 	if err != nil {
 		return classifyError("CreateFile", err)
