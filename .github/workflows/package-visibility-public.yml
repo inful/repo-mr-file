@@ -1,0 +1,53 @@
+name: package-visibility-public
+
+# One-shot workflow to flip the GHCR package `inful/repo-mr-file`
+# from PRIVATE (created when the repo was private) to PUBLIC.
+#
+# Trigger: workflow_dispatch only. After this runs successfully, this
+# file can be deleted from the repo — the visibility change persists.
+#
+# Why this needs its own workflow:
+#   - The `gh auth token` for local CLI development does NOT carry
+#     `read:packages` / `packages:write` scopes, so the API returns
+#     403 from the local shell.
+#   - GitHub Actions issues a per-run token with the workflow's
+#     declared permissions; with `packages: write` we can PATCH the
+#     package directly.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Make the GHCR package public
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # GitHub Packages endpoint for user-scoped container packages.
+          # PATCH with body { "visibility": "public" } promotes visibility.
+          URL="https://api.github.com/users/inful/packages/container/repo-mr-file"
+          echo "Promoting ${URL} to public..."
+          curl -sS -X PATCH \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d '{"visibility":"public"}' \
+            "${URL}" \
+            | python3 -m json.tool
+
+          # Smoke check: anonymous GET should now succeed with auth challenges
+          # absorbed (manifest fetched).
+          echo ""
+          echo "Smoke check via ghcr.io (anonymous):"
+          for tag in latest 0.1.0-rc4; do
+            hdrs=$(curl -sI -o /dev/null -w "%{http_code}" \
+              "https://ghcr.io/v2/inful/repo-mr-file/manifests/${tag}")
+            echo "  ghcr.io/inful/repo-mr-file:${tag} → HTTP ${hdrs}"
+          done
