@@ -18,7 +18,7 @@ func TestClassifyStatus(t *testing.T) {
 		{http.StatusForbidden, KindAuth},
 		{http.StatusNotFound, KindNotFound},
 		{http.StatusConflict, KindConflict},
-		{http.StatusUnprocessableEntity, KindConfig},
+		{http.StatusUnprocessableEntity, KindConflict},
 		{http.StatusTooManyRequests, KindTransient},
 		{http.StatusInternalServerError, KindTransient},
 		{http.StatusBadGateway, KindTransient},

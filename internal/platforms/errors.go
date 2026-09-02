@@ -94,15 +94,20 @@ func New(kind Kind, op string, err error) *Error {
 }
 
 // ClassifyStatus maps an HTTP status code to a Kind. 4xx codes other than
-// 401/403/404/409/429 fall into KindConfig (input mistakes), and 5xx/429
-// fall into KindTransient (worth retrying).
+// 401/403/404/409/422/429 fall into KindConfig (input mistakes), and
+// 5xx/429 fall into KindTransient (worth retrying).
+//
+// 422 is mapped to KindConflict (not KindConfig) because GitHub and
+// Gitea/Forgejo use 422 to signal a stale-branch-head on UpdateFile —
+// the same condition GitLab reports as 409. Mapping 422 to KindConflict
+// keeps stale-branch conflicts on exit code 5 across all platforms.
 func ClassifyStatus(status int) Kind {
 	switch {
 	case status == http.StatusUnauthorized, status == http.StatusForbidden:
 		return KindAuth
 	case status == http.StatusNotFound:
 		return KindNotFound
-	case status == http.StatusConflict:
+	case status == http.StatusConflict, status == http.StatusUnprocessableEntity:
 		return KindConflict
 	case status == http.StatusTooManyRequests || status >= 500:
 		return KindTransient
