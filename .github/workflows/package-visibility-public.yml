@@ -32,7 +32,10 @@ jobs:
           set -euo pipefail
           # GitHub Packages endpoint for user-scoped container packages.
           # PATCH with body { "visibility": "public" } promotes visibility.
-          URL="https://api.github.com/users/inful/packages/container/repo-mr-file"
+          # User-scoped package endpoint (the owner is the authenticated user,
+          # not the username in the URL). User endpoint: /user/packages/{type}/{name}.
+          # Org endpoint (if owner were an org) would be /orgs/{org}/packages/{type}/{name}.
+          URL="https://api.github.com/user/packages/container/repo-mr-file"
           echo "Promoting ${URL} to public..."
           curl -sS -X PATCH \
             -H "Authorization: Bearer ${TOKEN}" \
