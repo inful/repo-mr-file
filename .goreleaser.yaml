@@ -1,0 +1,106 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: repo-mr-file
+
+before:
+  hooks:
+    # Run vet and the race-enabled test suite so a release is blocked
+    # if those gates ever drift into a non-green state.
+    - go mod tidy
+    - go vet ./...
+    - go test -race -count=1 -timeout 60s ./...
+
+builds:
+  - main: ./cmd/repo-mr-file
+    binary: repo-mr-file
+    id: repo-mr-file
+    env:
+      - CGO_ENABLED=0
+    flags:
+      # -trimpath strips the build-machine filesystem paths from the
+      # binary so the tool behaves identically regardless of who built
+      # it (matches the README's "go build -trimpath" recommendation).
+      - -trimpath
+    ldflags:
+      # -s strips the symbol table; -w strips DWARF debug info.
+      # Combined: 15.4 MB stripped binary locally.
+      - -s -w
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # windows/arm64 isn't generally usable; GitHub-hosted runners
+      # build it but the resulting binary is rare in the wild.
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: default
+    formats: [tar.gz, zip]
+    # Archive name shape per platform.
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      # Ship the README and LICENSE (if any) inside each archive so
+      # downstream consumers get the docs with the binary.
+      - README.md
+      - LICENSE*
+
+checksum:
+  # The checksum file is included in the release as `checksums.txt` so
+  # consumers can verify the binary integrity with sha256sum.
+  name_template: '{{ .ProjectName }}_{{ .Version }}_checksums.txt'
+  algorithm: sha256
+
+snapshot:
+  # `goreleaser release --snapshot` produces binaries tagged with the
+  # next-patch version + '-next' suffix and a fake SHA. Useful for
+  # verifying the config locally without pushing a tag.
+  version_template: '{{ incpatch .Version }}-next'
+
+changelog:
+  use: git
+  sort: asc
+  # Conventional-commit groups matched against the commit subject.
+  # Anything that doesn't match one of these regexes lands under
+  # "Other changes". Same groups GitHub itself defaults to.
+  groups:
+    - title: Features
+      regexp: "^feat"
+      order: 0
+    - title: 'Bug fixes'
+      regexp: "^fix"
+      order: 1
+    - title: 'Documentation changes'
+      regexp: "^docs"
+      order: 2
+    - title: 'Continuous integration'
+      regexp: "^ci"
+      order: 3
+    - title: 'Refactors'
+      regexp: "^refactor"
+      order: 4
+    - title: 'Tests'
+      regexp: "^test"
+      order: 5
+    - title: 'Build configuration'
+      regexp: "^chore|build|ci|style"
+      order: 6
+
+release:
+  # Auto-enabled on `goreleaser release` (no tag push needed for draft).
+  # Tag pushes via CI use the github_release section below to publish
+  # to https://github.com/inful/repo-mr-file/releases.
+  github:
+    owner: inful
+    name: repo-mr-file
+  prerelease: auto
+  draft: false

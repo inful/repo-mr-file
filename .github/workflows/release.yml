@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: release
+
+# Workflow scope: tag-only. PRs are gated by the local lefthook
+# pre-commit (go test -race -count=1 + golangci-lint run) plus the
+# contribution policy in README.md.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-rc.*'
+      - 'v*.*.*-beta.*'
+
+# `contents: write` is required for goreleaser to publish a GitHub
+# Release (creating / updating the tag, uploading the assets).
+permissions:
+  contents: write
+
+jobs:
+  goreleaser-release:
+    name: Build & publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 required by goreleaser for the conventional-
+          # commits changelog; without it `git log` returns just the
+          # single squashed commit and the changelog is empty.
+          fetch-depth: 0
+          # Pin to the same tag we're releasing so tests in CI match
+          # the tested commit. (Otherwise `actions/checkout@v4`
+          # defaults to the branch HEAD, which isn't yet the tag.)
+          ref: ${{ github.ref }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Match go.mod. Bump both together.
+          go-version: '1.26'
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          # v2 line; allow patch updates.
+          version: '~> v2'
+          # --clean wipes dist/ before building; this workflow owns
+          # the release so a stale dist/ from a previous test shouldn't
+          # leak into the published artifact list.
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
