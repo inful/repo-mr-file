@@ -180,7 +180,7 @@ func stubDeps(t *testing.T, mock *mockGitLab, bundle []byte, config Config) Deps
 		Client: client,
 		Logger: logging.New(io.Discard, "text", false),
 		Config: config,
-		Bundle: bundle,
+		Source: bundle,
 		DryRun: false,
 	}
 }
@@ -189,7 +189,7 @@ func defaultConfig() Config {
 	return Config{
 		Tag:           "v1.2.3",
 		Repo:          "foo/bar",
-		CertPath:      "ca.pem",
+		TargetPath:    "ca.pem",
 		TargetBranch:  "main",
 		BranchName:    "chore/update-ca-bundle-v1.2.3",
 		CommitMessage: "chore: update CA bundle",
@@ -481,7 +481,7 @@ func TestRun_LoggerLogsBashMirroringLines(t *testing.T) {
 		Client: gitlab.WithRetry(oc, gitlab.RetryConfig{MaxAttempts: 1, InitialBackoff: time.Microsecond}),
 		Logger: logger,
 		Config: defaultConfig(),
-		Bundle: []byte("new"),
+		Source: []byte("new"),
 	}
 
 	if _, err := Run(context.Background(), deps); err != nil {

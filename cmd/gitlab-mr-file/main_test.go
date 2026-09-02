@@ -112,8 +112,8 @@ func stubRunDeps(t *testing.T) ([]string, string) {
 	return []string{
 		"--tag=v1.2.3",
 		"--repo=foo/bar",
-		"--cert-path=ca.pem",
-		"--bundle=" + bundle,
+		"--target-path=ca.pem",
+		"--source-path=" + bundle,
 		"--gitlab-token=tk",
 	}, bundle
 }
@@ -196,8 +196,8 @@ func TestRun_BundleFileMissing_Exit2(t *testing.T) {
 	got := run([]string{
 		"--tag=t",
 		"--repo=foo/bar",
-		"--cert-path=ca.pem",
-		"--bundle=/nonexistent/file.pem",
+		"--target-path=ca.pem",
+		"--source-path=/nonexistent/file.pem",
 		"--gitlab-token=tk",
 	}, &stdout, &stderr, nil)
 	if got != 2 {

@@ -26,7 +26,7 @@ import (
 type Config struct {
 	Tag           string
 	Repo          string
-	CertPath      string
+	TargetPath    string
 	TargetBranch  string
 	BranchName    string
 	CommitMessage string
@@ -39,7 +39,7 @@ type Deps struct {
 	Client gitlab.Client
 	Logger *slog.Logger
 	Config Config
-	Bundle []byte
+	Source []byte
 	DryRun bool
 }
 
@@ -165,7 +165,7 @@ func Run(ctx context.Context, deps Deps) (Result, error) {
 }
 
 // writeFileIfNeeded compares the source bundle against the file at
-// (Repo, CertPath, sourceBranch). It writes the file when it differs from
+// (Repo, TargetPath, sourceBranch). It writes the file when it differs from
 // the source (or doesn't exist), and reports back:
 //
 //   - writeNeeded:  true if the caller must continue to MR creation;
@@ -178,34 +178,34 @@ func Run(ctx context.Context, deps Deps) (Result, error) {
 // the source branch differs from the target (file matches, no MR yet —
 // we still want the MR).
 func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, sourceBranch string) (writeNeeded bool, lastCommitID string, err error) {
-	file, ferr := deps.Client.GetFile(ctx, deps.Config.Repo, deps.Config.CertPath, sourceBranch)
+	file, ferr := deps.Client.GetFile(ctx, deps.Config.Repo, deps.Config.TargetPath, sourceBranch)
 	if ferr != nil {
 		if e := gitlab.As(ferr); e == nil || e.Kind != gitlab.KindNotFound {
 			return false, "", ferr
 		}
 		// File does not exist — POST it.
-		logger.Info(fmt.Sprintf(logging.MsgCreatingFile, deps.Config.CertPath, deps.Config.Repo))
+		logger.Info(fmt.Sprintf(logging.MsgCreatingFile, deps.Config.TargetPath, deps.Config.Repo))
 		if cerr := deps.Client.CreateFile(ctx, deps.Config.Repo,
-			deps.Config.BranchName, deps.Config.CertPath,
-			deps.Config.CommitMessage, bytes.NewReader(deps.Bundle)); cerr != nil {
+			deps.Config.BranchName, deps.Config.TargetPath,
+			deps.Config.CommitMessage, bytes.NewReader(deps.Source)); cerr != nil {
 			return false, "", cerr
 		}
 		logger.Info(fmt.Sprintf(logging.MsgFileUpdated, "POST", deps.Config.BranchName))
 		return true, "", nil
 	}
 
-	if bytes.Equal(file.Content, deps.Bundle) {
-		logger.Info(fmt.Sprintf(logging.MsgBundleMatches, deps.Config.CertPath))
+	if bytes.Equal(file.Content, deps.Source) {
+		logger.Info(fmt.Sprintf(logging.MsgBundleMatches, deps.Config.TargetPath))
 		// File matches; caller decides whether to short-circuit or to
 		// still create an MR (which is the caller's responsibility).
 		return false, "", nil
 	}
 
 	// File exists but differs — PUT.
-	logger.Info(fmt.Sprintf(logging.MsgUpdatingFile, deps.Config.CertPath, deps.Config.Repo))
+	logger.Info(fmt.Sprintf(logging.MsgUpdatingFile, deps.Config.TargetPath, deps.Config.Repo))
 	if uerr := deps.Client.UpdateFile(ctx, deps.Config.Repo,
-		deps.Config.BranchName, deps.Config.CertPath,
-		deps.Config.CommitMessage, file.LastCommitID, bytes.NewReader(deps.Bundle)); uerr != nil {
+		deps.Config.BranchName, deps.Config.TargetPath,
+		deps.Config.CommitMessage, file.LastCommitID, bytes.NewReader(deps.Source)); uerr != nil {
 		return false, "", uerr
 	}
 	logger.Info(fmt.Sprintf(logging.MsgFileUpdated, "PUT", deps.Config.BranchName))
@@ -228,16 +228,16 @@ func runDry(ctx context.Context, logger *slog.Logger, deps Deps) (Result, error)
 	if _, err := deps.Client.GetBranch(ctx, deps.Config.Repo, deps.Config.BranchName); err != nil {
 		return Result{}, err
 	}
-	if _, err := deps.Client.GetFile(ctx, deps.Config.Repo, deps.Config.CertPath, deps.Config.TargetBranch); err != nil {
+	if _, err := deps.Client.GetFile(ctx, deps.Config.Repo, deps.Config.TargetPath, deps.Config.TargetBranch); err != nil {
 		// Dry-run client returns a synthetic KindNotFound; that's fine.
 		if e := gitlab.As(err); e == nil || e.Kind != gitlab.KindNotFound {
 			return Result{}, err
 		}
 	}
-	logger.Info(fmt.Sprintf(logging.MsgCreatingFile, deps.Config.CertPath, deps.Config.Repo))
+	logger.Info(fmt.Sprintf(logging.MsgCreatingFile, deps.Config.TargetPath, deps.Config.Repo))
 	if err := deps.Client.CreateFile(ctx, deps.Config.Repo,
-		deps.Config.BranchName, deps.Config.CertPath,
-		deps.Config.CommitMessage, bytes.NewReader(deps.Bundle)); err != nil {
+		deps.Config.BranchName, deps.Config.TargetPath,
+		deps.Config.CommitMessage, bytes.NewReader(deps.Source)); err != nil {
 		return Result{}, err
 	}
 	logger.Info(fmt.Sprintf(logging.MsgFileUpdated, "POST", deps.Config.BranchName))

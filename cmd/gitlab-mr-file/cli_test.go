@@ -11,7 +11,7 @@ import (
 )
 
 // writeBundle creates a temp CA-bundle file and returns its path. Tests use
-// this to satisfy the required --bundle flag.
+// this to satisfy the required --source-path flag.
 func writeBundle(t *testing.T) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "ca-bundle.pem")
@@ -27,8 +27,8 @@ func validArgs(bundle string) []string {
 	return []string{
 		"--tag=v1.2.3",
 		"--repo=some/project",
-		"--cert-path=ca.pem",
-		"--bundle=" + bundle,
+		"--target-path=ca.pem",
+		"--source-path=" + bundle,
 		"--gitlab-token=secret",
 	}
 }
@@ -66,11 +66,11 @@ func TestCLI_RequiredFlagsMissing(t *testing.T) {
 		args    []string
 		missing string
 	}{
-		{"tag", []string{"--repo=r", "--cert-path=c", "--bundle=" + bundle, "--gitlab-token=t"}, "--tag"},
-		{"repo", []string{"--tag=t", "--cert-path=c", "--bundle=" + bundle, "--gitlab-token=t"}, "--repo"},
-		{"cert-path", []string{"--tag=t", "--repo=r", "--bundle=" + bundle, "--gitlab-token=t"}, "--cert-path"},
-		{"bundle", []string{"--tag=t", "--repo=r", "--cert-path=c", "--gitlab-token=t"}, "--bundle"},
-		{"gitlab-token", []string{"--tag=t", "--repo=r", "--cert-path=c", "--bundle=" + bundle}, "--gitlab-token"},
+		{"tag", []string{"--repo=r", "--target-path=c", "--source-path=" + bundle, "--gitlab-token=t"}, "--tag"},
+		{"repo", []string{"--tag=t", "--target-path=c", "--source-path=" + bundle, "--gitlab-token=t"}, "--repo"},
+		{"target-path", []string{"--tag=t", "--repo=r", "--source-path=" + bundle, "--gitlab-token=t"}, "--target-path"},
+		{"bundle", []string{"--tag=t", "--repo=r", "--target-path=c", "--gitlab-token=t"}, "--source-path"},
+		{"gitlab-token", []string{"--tag=t", "--repo=r", "--target-path=c", "--source-path=" + bundle}, "--gitlab-token"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -93,7 +93,7 @@ func TestCLI_EnvBindingGitLabAPI(t *testing.T) {
 	t.Setenv("GITLAB_TOKEN", "env-token")
 
 	cli := mustParseCLI(t,
-		"--tag=t", "--repo=r", "--cert-path=c", "--bundle="+bundle,
+		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle,
 	)
 
 	if got, want := cli.GitLabAPI, "https://gitlab.example.com/api/v4"; got != want {
@@ -109,7 +109,7 @@ func TestCLI_FlagOverridesEnv(t *testing.T) {
 	t.Setenv("GITLAB_API", "https://env.example.com/api/v4")
 
 	cli := mustParseCLI(t,
-		"--tag=t", "--repo=r", "--cert-path=c", "--bundle="+bundle, "--gitlab-token=tk",
+		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--gitlab-token=tk",
 		"--gitlab-api=https://flag.example.com/api/v4",
 	)
 
@@ -149,7 +149,7 @@ func TestCLI_Defaults(t *testing.T) {
 func TestCLI_BoolFlags(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t,
-		"--tag=t", "--repo=r", "--cert-path=c", "--bundle="+bundle, "--gitlab-token=tk",
+		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--gitlab-token=tk",
 		"--verbose", "--dry-run",
 	)
 
@@ -166,7 +166,7 @@ func TestCLI_BoolFlags(t *testing.T) {
 func TestCLI_AfterApplyTemplating(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t,
-		"--tag=v9.9.9", "--repo=r", "--cert-path=c", "--bundle="+bundle, "--gitlab-token=tk",
+		"--tag=v9.9.9", "--repo=r", "--target-path=c", "--source-path="+bundle, "--gitlab-token=tk",
 	)
 
 	if got, want := cli.BranchName, "chore/update-ca-bundle-v9.9.9"; got != want {
@@ -195,7 +195,7 @@ func TestCLI_AfterApplyGitLabURLDerived(t *testing.T) {
 func TestCLI_AfterApplyDoesNotOverwriteExplicit(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t,
-		"--tag=t", "--repo=r", "--cert-path=c", "--bundle="+bundle, "--gitlab-token=tk",
+		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--gitlab-token=tk",
 		"--branch-name=custom-branch",
 		"--commit-message=custom message",
 		"--mr-title=custom title",
@@ -221,8 +221,8 @@ func TestCLI_AfterApplyDoesNotOverwriteExplicit(t *testing.T) {
 
 func TestCLI_ValidateRejectsMissingBundle(t *testing.T) {
 	_, err := parseCLI(t,
-		"--tag=t", "--repo=r", "--cert-path=c",
-		"--bundle=/nonexistent/path/ca.pem",
+		"--tag=t", "--repo=r", "--target-path=c",
+		"--source-path=/nonexistent/path/ca.pem",
 		"--gitlab-token=tk",
 	)
 	if err == nil {
@@ -236,8 +236,8 @@ func TestCLI_ValidateRejectsMissingBundle(t *testing.T) {
 func TestCLI_ValidateRejectsDirectory(t *testing.T) {
 	dir := t.TempDir()
 	_, err := parseCLI(t,
-		"--tag=t", "--repo=r", "--cert-path=c",
-		"--bundle="+dir,
+		"--tag=t", "--repo=r", "--target-path=c",
+		"--source-path="+dir,
 		"--gitlab-token=tk",
 	)
 	if err == nil {
@@ -253,7 +253,7 @@ func TestCLI_ValidateRejectsDirectory(t *testing.T) {
 func TestCLI_LogFormatEnum(t *testing.T) {
 	bundle := writeBundle(t)
 	_, err := parseCLI(t,
-		"--tag=t", "--repo=r", "--cert-path=c", "--bundle="+bundle, "--gitlab-token=tk",
+		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--gitlab-token=tk",
 		"--log-format=xml",
 	)
 	if err == nil {

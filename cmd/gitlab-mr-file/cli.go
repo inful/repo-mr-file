@@ -15,10 +15,10 @@ import (
 // AfterApply hook; file-existence checks are done in Validate.
 type CLI struct {
 	// Required inputs.
-	Tag      string `required:"" help:"Custom-certs release tag."`
-	Repo     string `required:"" help:"GitLab project path to update."`
-	CertPath string `required:"" name:"cert-path" help:"Path of the cert file inside the target repo."`
-	Bundle   string `required:"" help:"Local path to the source CA bundle."`
+	Tag        string `required:"" help:"Release tag that identifies this update."`
+	Repo       string `required:"" help:"GitLab project path to update."`
+	TargetPath string `required:"" name:"target-path" help:"Path of the file inside the target repo."`
+	SourcePath string `required:"" name:"source-path" help:"Local path to the source file."`
 
 	// GitLab connection.
 	GitLabAPI   string `default:"https://gitlab.mgmlab.net/api/v4" env:"GITLAB_API" name:"gitlab-api" help:"GitLab API base URL."`
@@ -72,24 +72,24 @@ func (c *CLI) AfterApply() error {
 	return nil
 }
 
-// Validate confirms that the source bundle file exists, is a regular file,
-// and is readable. Kong invokes this before its built-in missing-flags check,
-// so we skip the file check when Bundle is empty and let kong surface the
-// "missing required flag --bundle" error itself.
+// Validate confirms that the source file exists, is a regular file, and is
+// readable. Kong invokes this before its built-in missing-flags check, so we
+// skip the file check when SourcePath is empty and let kong surface the
+// "missing required flag --source-path" error itself.
 func (c *CLI) Validate() error {
-	if c.Bundle == "" {
+	if c.SourcePath == "" {
 		return nil
 	}
-	info, err := os.Stat(c.Bundle)
+	info, err := os.Stat(c.SourcePath)
 	if err != nil {
-		return fmt.Errorf("--bundle: %w", err)
+		return fmt.Errorf("--source-path: %w", err)
 	}
 	if info.IsDir() {
-		return fmt.Errorf("--bundle: %s is a directory", c.Bundle)
+		return fmt.Errorf("--source-path: %s is a directory", c.SourcePath)
 	}
-	f, err := os.Open(c.Bundle)
+	f, err := os.Open(c.SourcePath)
 	if err != nil {
-		return fmt.Errorf("--bundle: %w", err)
+		return fmt.Errorf("--source-path: %w", err)
 	}
 	_ = f.Close()
 	return nil

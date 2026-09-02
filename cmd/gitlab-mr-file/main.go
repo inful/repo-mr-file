@@ -69,10 +69,10 @@ func run(args []string, stdout, stderr io.Writer, clientOverride gitlab.Client) 
 
 	logger := logging.New(stderr, cli.LogFormat, cli.Verbose)
 
-	// Read the source bundle.
-	bundle, err := os.ReadFile(cli.Bundle)
+	// Read the source file.
+	source, err := os.ReadFile(cli.SourcePath)
 	if err != nil {
-		logger.Error("read bundle", "path", cli.Bundle, "err", err.Error())
+		logger.Error("read source file", "path", cli.SourcePath, "err", err.Error())
 		return 2
 	}
 
@@ -101,14 +101,14 @@ func run(args []string, stdout, stderr io.Writer, clientOverride gitlab.Client) 
 		Config: bundler.Config{
 			Tag:           cli.Tag,
 			Repo:          cli.Repo,
-			CertPath:      cli.CertPath,
+			TargetPath:    cli.TargetPath,
 			TargetBranch:  cli.TargetBranch,
 			BranchName:    cli.BranchName,
 			CommitMessage: cli.CommitMessage,
 			MRTitle:       cli.MRTitle,
 			MRDescription: cli.MRDescription,
 		},
-		Bundle: bundle,
+		Source: source,
 		DryRun: cli.DryRun,
 	}
 
