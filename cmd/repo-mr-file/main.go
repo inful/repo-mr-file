@@ -1,13 +1,14 @@
-// Command create-bundle-mr creates or updates a GitLab merge request that
-// delivers an updated CA certificate bundle to an external repository.
+// Command repo-mr-file creates or updates a GitLab, GitHub, Gitea, or
+// Forgejo merge/pull request that delivers an updated file to an external
+// repository.
 //
-// See README.md for usage, flags, env vars, exit codes, and migration notes
-// from the bash script this tool replaces.
+// See README.md for usage, flags, env vars, exit codes, and supported
+// platforms.
 //
 // The CLI grammar lives in cli.go and the workflow in internal/bundler.
-// This file wires them together: parses flags, builds the GitLab client
-// (or a dry-run / recording client), invokes the bundler, maps typed
-// errors to exit codes, and prints the merge-request URL on success.
+// This file wires them together: parses flags, builds a platform-specific
+// client (or a dry-run / recording client), invokes the bundler, maps
+// typed errors to exit codes, and prints the merge-request URL on success.
 package main
 
 import (
@@ -18,29 +19,30 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/inful/gitlab-mr-file/internal/bundler"
-	"github.com/inful/gitlab-mr-file/internal/gitlab"
-	"github.com/inful/gitlab-mr-file/internal/logging"
+	"github.com/inful/repo-mr-file/internal/bundler"
+	"github.com/inful/repo-mr-file/internal/logging"
+	"github.com/inful/repo-mr-file/internal/platforms"
+	gitlabplatform "github.com/inful/repo-mr-file/internal/platforms/gitlab"
 )
 
-// exitCodeFromError maps a typed *gitlab.Error to a process exit code, as
+// exitCodeFromError maps a typed *platforms.Error to a process exit code, as
 // documented in the README exit-code table. Unknown kinds return 7
 // (unexpected internal error).
 func exitCodeFromError(err error) int {
-	e := gitlab.As(err)
+	e := platforms.As(err)
 	if e == nil {
 		return 7
 	}
 	switch e.Kind {
-	case gitlab.KindConfig:
+	case platforms.KindConfig:
 		return 2
-	case gitlab.KindAuth:
+	case platforms.KindAuth:
 		return 3
-	case gitlab.KindNotFound:
+	case platforms.KindNotFound:
 		return 4
-	case gitlab.KindConflict:
+	case platforms.KindConflict:
 		return 5
-	case gitlab.KindTransient:
+	case platforms.KindTransient:
 		return 6
 	default:
 		return 7
@@ -51,12 +53,12 @@ func exitCodeFromError(err error) int {
 // bundler, and returns the process exit code. stdout / stderr are taken as
 // io.Writer so tests can capture output; clientOverride lets tests inject a
 // fake Client (pass nil to use --dry-run or build from CLI).
-func run(args []string, stdout, stderr io.Writer, clientOverride gitlab.Client) int {
+func run(args []string, stdout, stderr io.Writer, clientOverride platforms.Client) int {
 	var cli CLI
 	parser, err := kong.New(&cli,
 		kong.Exit(func(int) {}),
-		kong.Name("create-bundle-mr"),
-		kong.Description("Create or update a GitLab merge request that delivers an updated CA certificate bundle."),
+		kong.Name("repo-mr-file"),
+		kong.Description("Create or update a GitLab, GitHub, Gitea, or Forgejo merge/pull request."),
 	)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
@@ -76,23 +78,23 @@ func run(args []string, stdout, stderr io.Writer, clientOverride gitlab.Client) 
 		return 2
 	}
 
-	// Build the GitLab client (or use the override).
-	retryCfg := gitlab.RetryConfig{
+	// Build the platform-specific client (or use the override).
+	retryCfg := platforms.RetryConfig{
 		MaxAttempts:    cli.Retries + 1, // --retries counts additional attempts
 		InitialBackoff: cli.RetryBackoff,
 		Logger:         logger,
 	}
-	var client gitlab.Client
+	var client platforms.Client
 	switch {
 	case clientOverride != nil:
 		// Apply the configured retry policy to injected clients too so
 		// tests can verify retry semantics end-to-end.
-		client = gitlab.WithRetry(clientOverride, retryCfg)
+		client = platforms.WithRetry(clientOverride, retryCfg)
 	case cli.DryRun:
-		client = gitlab.NewDryRunClient()
+		client = platforms.NewDryRunClient()
 	default:
-		oc := gitlab.NewOfficialClient(cli.GitLabAPI, cli.GitLabToken)
-		client = gitlab.WithRetry(oc, retryCfg)
+		oc := gitlabplatform.NewOfficialClient(cli.APIBase, cli.APIToken)
+		client = platforms.WithRetry(oc, retryCfg)
 	}
 
 	deps := bundler.Deps{

@@ -1,4 +1,4 @@
-module github.com/inful/gitlab-mr-file
+module github.com/inful/repo-mr-file
 
 go 1.26.7
 

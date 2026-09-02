@@ -20,10 +20,10 @@ type CLI struct {
 	TargetPath string `required:"" name:"target-path" help:"Path of the file inside the target repo."`
 	SourcePath string `required:"" name:"source-path" help:"Local path to the source file."`
 
-	// GitLab connection.
-	GitLabAPI   string `default:"https://gitlab.mgmlab.net/api/v4" env:"GITLAB_API" name:"gitlab-api" help:"GitLab API base URL."`
-	GitLabURL   string `env:"GITLAB_URL" name:"gitlab-url" help:"GitLab web URL (defaults to --gitlab-api minus /api/v4)."`
-	GitLabToken string `required:"" env:"GITLAB_TOKEN" name:"gitlab-token" help:"GitLab API token with api scope."`
+	// Platform connection (works for gitlab, github, gitea, forgejo).
+	APIBase  string `default:"https://gitlab.mgmlab.net/api/v4" env:"API_BASE" name:"api-base" help:"Platform API base URL (e.g. https://host/api/v4 for GitLab, https://api.github.com for GitHub, https://host/api/v1 for Gitea/Forgejo)."`
+	APIURL   string `env:"API_URL" name:"api-url" help:"Platform web URL (defaults to --api-base minus the API suffix)."`
+	APIToken string `required:"" env:"API_TOKEN" name:"api-token" help:"Platform API token with the required scopes (api for GitLab, repo for GitHub, repo for Gitea/Forgejo)."`
 
 	// Branching.
 	TargetBranch string `env:"TARGET_BRANCH" name:"target-branch" help:"Branch to receive the MR. Defaults to the project default branch."`
@@ -48,7 +48,7 @@ type CLI struct {
 }
 
 // AfterApply populates the templated defaults that reference --tag and
-// derives --gitlab-url from --gitlab-api. Kong invokes this after
+// derives --api-url from --api-base. Kong invokes this after
 // command-line values have been applied and validation has succeeded.
 //
 // Templates are deliberately generic: the tool isn't tied to any one
@@ -69,8 +69,13 @@ func (c *CLI) AfterApply() error {
 			c.TargetPath, c.Tag,
 		)
 	}
-	if c.GitLabURL == "" {
-		c.GitLabURL = strings.TrimSuffix(c.GitLabAPI, "/api/v4")
+	if c.APIURL == "" {
+		// Best-effort derivation: strip a trailing /api/vN, /api/v4,
+		// or /api/v3 from the base. Different platforms use different
+		// suffixes; we try a few common ones.
+		c.APIURL = strings.TrimSuffix(c.APIBase, "/api/v4")
+		c.APIURL = strings.TrimSuffix(c.APIURL, "/api/v3")
+		c.APIURL = strings.TrimSuffix(c.APIURL, "/api/v1")
 	}
 	return nil
 }

@@ -18,8 +18,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/inful/gitlab-mr-file/internal/gitlab"
-	"github.com/inful/gitlab-mr-file/internal/logging"
+	"github.com/inful/repo-mr-file/internal/logging"
+	"github.com/inful/repo-mr-file/internal/platforms"
 )
 
 // Config is the subset of CLI fields the bundler needs.
@@ -36,7 +36,7 @@ type Config struct {
 
 // Deps carries the runtime dependencies Run needs.
 type Deps struct {
-	Client gitlab.Client
+	Client platforms.Client
 	Logger *slog.Logger
 	Config Config
 	Source []byte
@@ -89,7 +89,7 @@ func Run(ctx context.Context, deps Deps) (Result, error) {
 		targetBranch = proj.DefaultBranch
 	}
 	if targetBranch == "" {
-		return Result{}, gitlab.New(gitlab.KindConfig, "Run",
+		return Result{}, platforms.New(platforms.KindConfig, "Run",
 			errors.New("project has no default branch and --target-branch was not set"))
 	}
 	logger.Info(fmt.Sprintf(logging.MsgUsingTargetBranch, targetBranch))
@@ -142,7 +142,7 @@ func Run(ctx context.Context, deps Deps) (Result, error) {
 		return Result{MRURL: existingMR.WebURL}, nil
 	}
 	logger.Info(logging.MsgCreatingMR)
-	mr, err := deps.Client.CreateMR(ctx, deps.Config.Repo, gitlab.CreateMRInput{
+	mr, err := deps.Client.CreateMR(ctx, deps.Config.Repo, platforms.CreateMRInput{
 		SourceBranch: deps.Config.BranchName,
 		TargetBranch: targetBranch,
 		Title:        deps.Config.MRTitle,
@@ -151,7 +151,7 @@ func Run(ctx context.Context, deps Deps) (Result, error) {
 	if err != nil {
 		// 422: a concurrent run opened the MR between our List and Create.
 		// Re-list and reuse if possible.
-		if e := gitlab.As(err); e != nil && e.StatusCode == http.StatusUnprocessableEntity {
+		if e := platforms.As(err); e != nil && e.StatusCode == http.StatusUnprocessableEntity {
 			retryMR, listErr := deps.Client.ListOpenMR(ctx, deps.Config.Repo, deps.Config.BranchName, targetBranch)
 			if listErr == nil && retryMR != nil {
 				logger.Info(fmt.Sprintf(logging.MsgExistingMR, retryMR.WebURL))
@@ -180,7 +180,7 @@ func Run(ctx context.Context, deps Deps) (Result, error) {
 func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, sourceBranch string) (writeNeeded bool, lastCommitID string, err error) {
 	file, ferr := deps.Client.GetFile(ctx, deps.Config.Repo, deps.Config.TargetPath, sourceBranch)
 	if ferr != nil {
-		if e := gitlab.As(ferr); e == nil || e.Kind != gitlab.KindNotFound {
+		if e := platforms.As(ferr); e == nil || e.Kind != platforms.KindNotFound {
 			return false, "", ferr
 		}
 		// File does not exist — POST it.
@@ -230,7 +230,7 @@ func runDry(ctx context.Context, logger *slog.Logger, deps Deps) (Result, error)
 	}
 	if _, err := deps.Client.GetFile(ctx, deps.Config.Repo, deps.Config.TargetPath, deps.Config.TargetBranch); err != nil {
 		// Dry-run client returns a synthetic KindNotFound; that's fine.
-		if e := gitlab.As(err); e == nil || e.Kind != gitlab.KindNotFound {
+		if e := platforms.As(err); e == nil || e.Kind != platforms.KindNotFound {
 			return Result{}, err
 		}
 	}
@@ -242,7 +242,7 @@ func runDry(ctx context.Context, logger *slog.Logger, deps Deps) (Result, error)
 	}
 	logger.Info(fmt.Sprintf(logging.MsgFileUpdated, "POST", deps.Config.BranchName))
 	logger.Info(logging.MsgCreatingMR)
-	mr, err := deps.Client.CreateMR(ctx, deps.Config.Repo, gitlab.CreateMRInput{
+	mr, err := deps.Client.CreateMR(ctx, deps.Config.Repo, platforms.CreateMRInput{
 		SourceBranch: deps.Config.BranchName,
 		TargetBranch: deps.Config.TargetBranch,
 		Title:        deps.Config.MRTitle,

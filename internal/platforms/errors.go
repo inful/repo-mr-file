@@ -10,7 +10,7 @@
 //
 // A WithRetry wrapper decorates any Client with the configured retry policy
 // (5xx / 429 / network errors only, with exponential backoff and jitter).
-package gitlab
+package platforms
 
 import (
 	"errors"

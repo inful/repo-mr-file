@@ -29,7 +29,7 @@ func validArgs(bundle string) []string {
 		"--repo=some/project",
 		"--target-path=ca.pem",
 		"--source-path=" + bundle,
-		"--gitlab-token=secret",
+		"--api-token=secret",
 	}
 }
 
@@ -66,11 +66,11 @@ func TestCLI_RequiredFlagsMissing(t *testing.T) {
 		args    []string
 		missing string
 	}{
-		{"tag", []string{"--repo=r", "--target-path=c", "--source-path=" + bundle, "--gitlab-token=t"}, "--tag"},
-		{"repo", []string{"--tag=t", "--target-path=c", "--source-path=" + bundle, "--gitlab-token=t"}, "--repo"},
-		{"target-path", []string{"--tag=t", "--repo=r", "--source-path=" + bundle, "--gitlab-token=t"}, "--target-path"},
-		{"bundle", []string{"--tag=t", "--repo=r", "--target-path=c", "--gitlab-token=t"}, "--source-path"},
-		{"gitlab-token", []string{"--tag=t", "--repo=r", "--target-path=c", "--source-path=" + bundle}, "--gitlab-token"},
+		{"tag", []string{"--repo=r", "--target-path=c", "--source-path=" + bundle, "--api-token=t"}, "--tag"},
+		{"repo", []string{"--tag=t", "--target-path=c", "--source-path=" + bundle, "--api-token=t"}, "--repo"},
+		{"target-path", []string{"--tag=t", "--repo=r", "--source-path=" + bundle, "--api-token=t"}, "--target-path"},
+		{"bundle", []string{"--tag=t", "--repo=r", "--target-path=c", "--api-token=t"}, "--source-path"},
+		{"api-token", []string{"--tag=t", "--repo=r", "--target-path=c", "--source-path=" + bundle}, "--api-token"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -87,34 +87,34 @@ func TestCLI_RequiredFlagsMissing(t *testing.T) {
 
 // --- env var binding ---
 
-func TestCLI_EnvBindingGitLabAPI(t *testing.T) {
+func TestCLI_EnvBindingAPIBase(t *testing.T) {
 	bundle := writeBundle(t)
-	t.Setenv("GITLAB_API", "https://gitlab.example.com/api/v4")
-	t.Setenv("GITLAB_TOKEN", "env-token")
+	t.Setenv("API_BASE", "https://gitlab.example.com/api/v4")
+	t.Setenv("API_TOKEN", "env-token")
 
 	cli := mustParseCLI(t,
 		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle,
 	)
 
-	if got, want := cli.GitLabAPI, "https://gitlab.example.com/api/v4"; got != want {
-		t.Errorf("GitLabAPI = %q, want %q (from env)", got, want)
+	if got, want := cli.APIBase, "https://gitlab.example.com/api/v4"; got != want {
+		t.Errorf("APIBase = %q, want %q (from env)", got, want)
 	}
-	if got, want := cli.GitLabToken, "env-token"; got != want {
-		t.Errorf("GitLabToken = %q, want %q (from env)", got, want)
+	if got, want := cli.APIToken, "env-token"; got != want {
+		t.Errorf("APIToken = %q, want %q (from env)", got, want)
 	}
 }
 
 func TestCLI_FlagOverridesEnv(t *testing.T) {
 	bundle := writeBundle(t)
-	t.Setenv("GITLAB_API", "https://env.example.com/api/v4")
+	t.Setenv("API_BASE", "https://env.example.com/api/v4")
 
 	cli := mustParseCLI(t,
-		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--gitlab-token=tk",
-		"--gitlab-api=https://flag.example.com/api/v4",
+		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
+		"--api-base=https://flag.example.com/api/v4",
 	)
 
-	if got, want := cli.GitLabAPI, "https://flag.example.com/api/v4"; got != want {
-		t.Errorf("GitLabAPI = %q, want %q (flag overrides env)", got, want)
+	if got, want := cli.APIBase, "https://flag.example.com/api/v4"; got != want {
+		t.Errorf("APIBase = %q, want %q (flag overrides env)", got, want)
 	}
 }
 
@@ -124,8 +124,8 @@ func TestCLI_Defaults(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t, validArgs(bundle)...)
 
-	if got, want := cli.GitLabAPI, "https://gitlab.mgmlab.net/api/v4"; got != want {
-		t.Errorf("GitLabAPI = %q, want default %q", got, want)
+	if got, want := cli.APIBase, "https://gitlab.mgmlab.net/api/v4"; got != want {
+		t.Errorf("APIBase = %q, want default %q", got, want)
 	}
 	if got, want := cli.Retries, 3; got != want {
 		t.Errorf("Retries = %d, want %d", got, want)
@@ -149,7 +149,7 @@ func TestCLI_Defaults(t *testing.T) {
 func TestCLI_BoolFlags(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t,
-		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--gitlab-token=tk",
+		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
 		"--verbose", "--dry-run",
 	)
 
@@ -166,7 +166,7 @@ func TestCLI_BoolFlags(t *testing.T) {
 func TestCLI_AfterApplyTemplating(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t,
-		"--tag=v9.9.9", "--repo=r", "--target-path=docs/ips.txt", "--source-path="+bundle, "--gitlab-token=tk",
+		"--tag=v9.9.9", "--repo=r", "--target-path=docs/ips.txt", "--source-path="+bundle, "--api-token=tk",
 	)
 
 	if got, want := cli.BranchName, "update-v9.9.9"; got != want {
@@ -183,24 +183,24 @@ func TestCLI_AfterApplyTemplating(t *testing.T) {
 	}
 }
 
-func TestCLI_AfterApplyGitLabURLDerived(t *testing.T) {
+func TestCLI_AfterApplyAPIURLDerived(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t, validArgs(bundle)...)
 
-	if got, want := cli.GitLabURL, "https://gitlab.mgmlab.net"; got != want {
-		t.Errorf("GitLabURL = %q, want %q (derived from default GitLabAPI)", got, want)
+	if got, want := cli.APIURL, "https://gitlab.mgmlab.net"; got != want {
+		t.Errorf("APIURL = %q, want %q (derived from default APIBase)", got, want)
 	}
 }
 
 func TestCLI_AfterApplyDoesNotOverwriteExplicit(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t,
-		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--gitlab-token=tk",
+		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
 		"--branch-name=custom-branch",
 		"--commit-message=custom message",
 		"--mr-title=custom title",
 		"--mr-description=custom desc",
-		"--gitlab-url=https://my.gitlab.example.com",
+		"--api-url=https://my.gitlab.example.com",
 	)
 
 	if got, want := cli.BranchName, "custom-branch"; got != want {
@@ -212,8 +212,8 @@ func TestCLI_AfterApplyDoesNotOverwriteExplicit(t *testing.T) {
 	if got, want := cli.MRTitle, "custom title"; got != want {
 		t.Errorf("MRTitle = %q, want %q", got, want)
 	}
-	if got, want := cli.GitLabURL, "https://my.gitlab.example.com"; got != want {
-		t.Errorf("GitLabURL = %q, want %q", got, want)
+	if got, want := cli.APIURL, "https://my.gitlab.example.com"; got != want {
+		t.Errorf("APIURL = %q, want %q", got, want)
 	}
 }
 
@@ -223,7 +223,7 @@ func TestCLI_ValidateRejectsMissingBundle(t *testing.T) {
 	_, err := parseCLI(t,
 		"--tag=t", "--repo=r", "--target-path=c",
 		"--source-path=/nonexistent/path/ca.pem",
-		"--gitlab-token=tk",
+		"--api-token=tk",
 	)
 	if err == nil {
 		t.Fatal("expected error for missing bundle file")
@@ -238,7 +238,7 @@ func TestCLI_ValidateRejectsDirectory(t *testing.T) {
 	_, err := parseCLI(t,
 		"--tag=t", "--repo=r", "--target-path=c",
 		"--source-path="+dir,
-		"--gitlab-token=tk",
+		"--api-token=tk",
 	)
 	if err == nil {
 		t.Fatal("expected error for bundle being a directory")
@@ -253,7 +253,7 @@ func TestCLI_ValidateRejectsDirectory(t *testing.T) {
 func TestCLI_LogFormatEnum(t *testing.T) {
 	bundle := writeBundle(t)
 	_, err := parseCLI(t,
-		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--gitlab-token=tk",
+		"--tag=t", "--repo=r", "--target-path=c", "--source-path="+bundle, "--api-token=tk",
 		"--log-format=xml",
 	)
 	if err == nil {

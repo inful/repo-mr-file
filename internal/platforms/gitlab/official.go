@@ -8,16 +8,18 @@ import (
 	"io"
 	"net"
 
+	"github.com/inful/repo-mr-file/internal/platforms"
+
 	gitlab "gitlab.com/gitlab-org/api/client-go"
 )
 
-// NewOfficialClient constructs a Client that talks to a real GitLab
+// NewOfficialClient constructs a platforms.Client that talks to a real GitLab
 // instance via the official client. baseURL is the API root
 // (e.g. https://gitlab.example.com/api/v4); token is the bearer token.
 //
 // The underlying client's built-in retry logic is disabled so that
 // WithRetry can wrap the client with our own policy.
-func NewOfficialClient(baseURL, token string) Client {
+func NewOfficialClient(baseURL, token string) platforms.Client {
 	client, err := gitlab.NewClient(token,
 		gitlab.WithBaseURL(baseURL),
 		gitlab.WithoutRetries(),
@@ -25,7 +27,7 @@ func NewOfficialClient(baseURL, token string) Client {
 	if err != nil {
 		// NewClient only fails if the URL is malformed; surface as a
 		// persistent error wrapped in a Client that always returns it.
-		return &errClient{err: New(KindConfig, "NewOfficialClient", err)}
+		return &errClient{err: platforms.New(platforms.KindConfig, "NewOfficialClient", err)}
 	}
 	return &officialClient{client: client}
 }
@@ -37,13 +39,13 @@ type errClient struct {
 	err error
 }
 
-func (e *errClient) GetProject(_ context.Context, _ string) (*Project, error) {
+func (e *errClient) GetProject(_ context.Context, _ string) (*platforms.Project, error) {
 	return nil, e.err
 }
 func (e *errClient) GetBranch(_ context.Context, _, _ string) (bool, error) {
 	return false, e.err
 }
-func (e *errClient) GetFile(_ context.Context, _, _, _ string) (*File, error) {
+func (e *errClient) GetFile(_ context.Context, _, _, _ string) (*platforms.File, error) {
 	return nil, e.err
 }
 func (e *errClient) CreateFile(_ context.Context, _, _, _, _ string, _ io.Reader) error {
@@ -52,10 +54,10 @@ func (e *errClient) CreateFile(_ context.Context, _, _, _, _ string, _ io.Reader
 func (e *errClient) UpdateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
 	return e.err
 }
-func (e *errClient) ListOpenMR(_ context.Context, _, _, _ string) (*MergeRequest, error) {
+func (e *errClient) ListOpenMR(_ context.Context, _, _, _ string) (*platforms.MergeRequest, error) {
 	return nil, e.err
 }
-func (e *errClient) CreateMR(_ context.Context, _ string, _ CreateMRInput) (*MergeRequest, error) {
+func (e *errClient) CreateMR(_ context.Context, _ string, _ platforms.CreateMRInput) (*platforms.MergeRequest, error) {
 	return nil, e.err
 }
 
@@ -63,12 +65,12 @@ type officialClient struct {
 	client *gitlab.Client
 }
 
-func (c *officialClient) GetProject(ctx context.Context, repoPath string) (*Project, error) {
+func (c *officialClient) GetProject(ctx context.Context, repoPath string) (*platforms.Project, error) {
 	p, _, err := c.client.Projects.GetProject(repoPath, nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return nil, classifyError("GetProject", err)
 	}
-	return &Project{
+	return &platforms.Project{
 		ID:            int(p.ID),
 		DefaultBranch: p.DefaultBranch,
 		WebURL:        p.WebURL,
@@ -81,13 +83,13 @@ func (c *officialClient) GetBranch(ctx context.Context, repoPath, branch string)
 		return true, nil
 	}
 	e := classifyError("GetBranch", err)
-	if e := As(e); e != nil && e.Kind == KindNotFound {
+	if e := platforms.As(e); e != nil && e.Kind == platforms.KindNotFound {
 		return false, nil
 	}
 	return false, e
 }
 
-func (c *officialClient) GetFile(ctx context.Context, repoPath, filePath, ref string) (*File, error) {
+func (c *officialClient) GetFile(ctx context.Context, repoPath, filePath, ref string) (*platforms.File, error) {
 	f, _, err := c.client.RepositoryFiles.GetFile(repoPath, filePath,
 		&gitlab.GetFileOptions{Ref: &ref},
 		gitlab.WithContext(ctx))
@@ -96,9 +98,9 @@ func (c *officialClient) GetFile(ctx context.Context, repoPath, filePath, ref st
 	}
 	content, decErr := base64.StdEncoding.DecodeString(f.Content)
 	if decErr != nil {
-		return nil, New(KindInternal, "GetFile", fmt.Errorf("decode base64: %w", decErr))
+		return nil, platforms.New(platforms.KindInternal, "GetFile", fmt.Errorf("decode base64: %w", decErr))
 	}
-	return &File{
+	return &platforms.File{
 		Path:         f.FilePath,
 		Content:      content,
 		LastCommitID: f.LastCommitID,
@@ -108,7 +110,7 @@ func (c *officialClient) GetFile(ctx context.Context, repoPath, filePath, ref st
 func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, filePath, commitMsg string, content io.Reader) error {
 	contentBytes, err := io.ReadAll(content)
 	if err != nil {
-		return New(KindConfig, "CreateFile", err)
+		return platforms.New(platforms.KindConfig, "CreateFile", err)
 	}
 	encoded := base64.StdEncoding.EncodeToString(contentBytes)
 	encoding := "base64"
@@ -129,7 +131,7 @@ func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, fileP
 func (c *officialClient) UpdateFile(ctx context.Context, repoPath, branch, filePath, commitMsg, lastCommitID string, content io.Reader) error {
 	contentBytes, err := io.ReadAll(content)
 	if err != nil {
-		return New(KindConfig, "UpdateFile", err)
+		return platforms.New(platforms.KindConfig, "UpdateFile", err)
 	}
 	encoded := base64.StdEncoding.EncodeToString(contentBytes)
 	encoding := "base64"
@@ -148,7 +150,7 @@ func (c *officialClient) UpdateFile(ctx context.Context, repoPath, branch, fileP
 	return nil
 }
 
-func (c *officialClient) ListOpenMR(ctx context.Context, repoPath, sourceBranch, targetBranch string) (*MergeRequest, error) {
+func (c *officialClient) ListOpenMR(ctx context.Context, repoPath, sourceBranch, targetBranch string) (*platforms.MergeRequest, error) {
 	state := "opened"
 	mrs, _, err := c.client.MergeRequests.ListProjectMergeRequests(repoPath,
 		&gitlab.ListProjectMergeRequestsOptions{
@@ -164,7 +166,7 @@ func (c *officialClient) ListOpenMR(ctx context.Context, repoPath, sourceBranch,
 		return nil, nil
 	}
 	first := mrs[0]
-	return &MergeRequest{
+	return &platforms.MergeRequest{
 		IID:          int(first.IID),
 		SourceBranch: first.SourceBranch,
 		TargetBranch: first.TargetBranch,
@@ -174,7 +176,7 @@ func (c *officialClient) ListOpenMR(ctx context.Context, repoPath, sourceBranch,
 	}, nil
 }
 
-func (c *officialClient) CreateMR(ctx context.Context, repoPath string, in CreateMRInput) (*MergeRequest, error) {
+func (c *officialClient) CreateMR(ctx context.Context, repoPath string, in platforms.CreateMRInput) (*platforms.MergeRequest, error) {
 	mr, _, err := c.client.MergeRequests.CreateMergeRequest(repoPath,
 		&gitlab.CreateMergeRequestOptions{
 			SourceBranch: &in.SourceBranch,
@@ -186,7 +188,7 @@ func (c *officialClient) CreateMR(ctx context.Context, repoPath string, in Creat
 	if err != nil {
 		return nil, classifyError("CreateMR", err)
 	}
-	return &MergeRequest{
+	return &platforms.MergeRequest{
 		IID:          int(mr.IID),
 		SourceBranch: mr.SourceBranch,
 		TargetBranch: mr.TargetBranch,
@@ -196,10 +198,10 @@ func (c *officialClient) CreateMR(ctx context.Context, repoPath string, in Creat
 	}, nil
 }
 
-// classifyError maps an error from the official client into a typed *Error
-// carrying the appropriate Kind. Special handling for ErrNotFound (the
-// official client returns this for 404s without an embedded response) and
-// for net.Error (any transient network failure).
+// classifyError maps an error from the official client into a typed
+// *platforms.Error carrying the appropriate Kind. Special handling for
+// ErrNotFound (the official client returns this for 404s without an
+// embedded response) and for net.Error (any transient network failure).
 func classifyError(op string, err error) error {
 	if err == nil {
 		return nil
@@ -207,17 +209,17 @@ func classifyError(op string, err error) error {
 	// The official client returns ErrNotFound directly when 404 is hit and
 	// the per-method code path doesn't construct an ErrorResponse.
 	if errors.Is(err, gitlab.ErrNotFound) {
-		return New(KindNotFound, op, err)
+		return platforms.New(platforms.KindNotFound, op, err)
 	}
 	var er *gitlab.ErrorResponse
 	if errors.As(err, &er) {
 		status := er.Response.StatusCode
-		kind := ClassifyStatus(status)
-		return &Error{Kind: kind, Op: op, Err: err, StatusCode: status}
+		kind := platforms.ClassifyStatus(status)
+		return &platforms.Error{Kind: kind, Op: op, Err: err, StatusCode: status}
 	}
 	var ne net.Error
 	if errors.As(err, &ne) {
-		return &Error{Kind: KindTransient, Op: op, Err: err}
+		return &platforms.Error{Kind: platforms.KindTransient, Op: op, Err: err}
 	}
-	return &Error{Kind: KindUnknown, Op: op, Err: err}
+	return &platforms.Error{Kind: platforms.KindUnknown, Op: op, Err: err}
 }

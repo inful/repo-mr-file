@@ -15,8 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/inful/gitlab-mr-file/internal/gitlab"
-	"github.com/inful/gitlab-mr-file/internal/logging"
+	"github.com/inful/repo-mr-file/internal/logging"
+	"github.com/inful/repo-mr-file/internal/platforms"
+	gitlabplatform "github.com/inful/repo-mr-file/internal/platforms/gitlab"
 )
 
 // ---------------------------------------------------------------------------
@@ -174,8 +175,8 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 // stubDeps constructs a Deps pointing at the mock server.
 func stubDeps(t *testing.T, mock *mockGitLab, bundle []byte, config Config) Deps {
 	t.Helper()
-	oc := gitlab.NewOfficialClient(mock.URL()+"/api/v4", "test-token")
-	client := gitlab.WithRetry(oc, gitlab.RetryConfig{MaxAttempts: 1, InitialBackoff: time.Microsecond})
+	oc := gitlabplatform.NewOfficialClient(mock.URL()+"/api/v4", "test-token")
+	client := platforms.WithRetry(oc, platforms.RetryConfig{MaxAttempts: 1, InitialBackoff: time.Microsecond})
 	return Deps{
 		Client: client,
 		Logger: logging.New(io.Discard, "text", false),
@@ -382,8 +383,8 @@ func TestRun_UpdateFileConflict_PropagatesError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected conflict error")
 	}
-	e := gitlab.As(err)
-	if e == nil || e.Kind != gitlab.KindConflict {
+	e := platforms.As(err)
+	if e == nil || e.Kind != platforms.KindConflict {
 		t.Errorf("Kind = %v, want KindConflict (err = %v)", e, err)
 	}
 }
@@ -422,7 +423,7 @@ func TestRun_DryRun_NoNetworkCalls(t *testing.T) {
 	mock := newMockGitLab(t)
 	deps := stubDeps(t, mock, []byte("bundle"), defaultConfig())
 	deps.DryRun = true
-	deps.Client = gitlab.NewDryRunClient()
+	deps.Client = platforms.NewDryRunClient()
 
 	res, err := Run(context.Background(), deps)
 	if err != nil {
@@ -466,7 +467,7 @@ func TestRun_NoDefaultBranch_ReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing default branch")
 	}
-	if e := gitlab.As(err); e == nil || e.Kind != gitlab.KindConfig {
+	if e := platforms.As(err); e == nil || e.Kind != platforms.KindConfig {
 		t.Errorf("Kind = %v, want KindConfig (err = %v)", e, err)
 	}
 }
@@ -476,9 +477,9 @@ func TestRun_LoggerLogsBashMirroringLines(t *testing.T) {
 	var buf bytes.Buffer
 	logger := logging.New(&buf, "text", false)
 
-	oc := gitlab.NewOfficialClient(mock.URL()+"/api/v4", "test-token")
+	oc := gitlabplatform.NewOfficialClient(mock.URL()+"/api/v4", "test-token")
 	deps := Deps{
-		Client: gitlab.WithRetry(oc, gitlab.RetryConfig{MaxAttempts: 1, InitialBackoff: time.Microsecond}),
+		Client: platforms.WithRetry(oc, platforms.RetryConfig{MaxAttempts: 1, InitialBackoff: time.Microsecond}),
 		Logger: logger,
 		Config: defaultConfig(),
 		Source: []byte("new"),

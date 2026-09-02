@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/inful/repo-mr-file/internal/platforms"
+
 	gitlab "gitlab.com/gitlab-org/api/client-go"
 )
 
@@ -65,11 +67,11 @@ func TestOfficialClient_GetProject_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	e := As(err)
+	e := platforms.As(err)
 	if e == nil {
-		t.Fatalf("error is not a *Error: %v", err)
+		t.Fatalf("error is not a *platforms.Error: %v", err)
 	}
-	if e.Kind != KindNotFound {
+	if e.Kind != platforms.KindNotFound {
 		t.Errorf("Kind = %v, want KindNotFound", e.Kind)
 	}
 }
@@ -136,7 +138,7 @@ func TestOfficialClient_RetryOver503Then200(t *testing.T) {
 	defer srv.Close()
 
 	oc := NewOfficialClient(srv.URL+"/api/v4", "test-token")
-	c := WithRetry(oc, RetryConfig{MaxAttempts: 3, InitialBackoff: time.Microsecond})
+	c := platforms.WithRetry(oc, platforms.RetryConfig{MaxAttempts: 3, InitialBackoff: time.Microsecond})
 
 	p, err := c.GetProject(context.Background(), "foo/bar")
 	if err != nil {
@@ -186,8 +188,8 @@ func TestOfficialClient_UpdateFile_Conflict(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected conflict error")
 	}
-	e := As(err)
-	if e == nil || e.Kind != KindConflict {
+	e := platforms.As(err)
+	if e == nil || e.Kind != platforms.KindConflict {
 		t.Errorf("Kind = %v, want KindConflict (err = %v)", e, err)
 	}
 }
@@ -198,11 +200,11 @@ func TestOfficialClient_BadBaseURL(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from malformed URL")
 	}
-	e := As(err)
+	e := platforms.As(err)
 	if e == nil {
-		t.Fatalf("expected *Error, got %T: %v", err, err)
+		t.Fatalf("expected *platforms.Error, got %T: %v", err, err)
 	}
-	if e.Kind != KindConfig {
+	if e.Kind != platforms.KindConfig {
 		t.Errorf("Kind = %v, want KindConfig", e.Kind)
 	}
 }
@@ -251,12 +253,12 @@ func TestClassifyError(t *testing.T) {
 	cases := []struct {
 		name string
 		err  error
-		want Kind
+		want platforms.Kind
 	}{
-		{"nil", nil, KindUnknown},
-		{"ErrNotFound", gitlab.ErrNotFound, KindNotFound},
-		{"plain error", errors.New("plain"), KindUnknown},
-		{"net.OpError", &net.OpError{Op: "dial", Err: errors.New("no route")}, KindTransient},
+		{"nil", nil, platforms.KindUnknown},
+		{"ErrNotFound", gitlab.ErrNotFound, platforms.KindNotFound},
+		{"plain error", errors.New("plain"), platforms.KindUnknown},
+		{"net.OpError", &net.OpError{Op: "dial", Err: errors.New("no route")}, platforms.KindTransient},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -267,7 +269,7 @@ func TestClassifyError(t *testing.T) {
 				}
 				return
 			}
-			e := As(got)
+			e := platforms.As(got)
 			if e == nil || e.Kind != tc.want {
 				t.Errorf("classifyError Kind = %v, want %v", e, tc.want)
 			}
@@ -276,7 +278,7 @@ func TestClassifyError(t *testing.T) {
 }
 
 func TestErrClient_AllMethodsReturnError(t *testing.T) {
-	sentinel := New(KindConfig, "synthetic", errors.New("test error"))
+	sentinel := platforms.New(platforms.KindConfig, "synthetic", errors.New("test error"))
 	ec := &errClient{err: sentinel}
 	ctx := context.Background()
 
@@ -298,7 +300,7 @@ func TestErrClient_AllMethodsReturnError(t *testing.T) {
 	if _, err := ec.ListOpenMR(ctx, "x", "y", "z"); err == nil || !errors.Is(err, sentinel) {
 		t.Errorf("ListOpenMR = %v, want %v", err, sentinel)
 	}
-	if _, err := ec.CreateMR(ctx, "x", CreateMRInput{}); err == nil || !errors.Is(err, sentinel) {
+	if _, err := ec.CreateMR(ctx, "x", platforms.CreateMRInput{}); err == nil || !errors.Is(err, sentinel) {
 		t.Errorf("CreateMR = %v, want %v", err, sentinel)
 	}
 }
