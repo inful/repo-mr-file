@@ -9,8 +9,28 @@ through a merge request (MR) or pull request (PR).
 
 ## Install
 
+Pre-built binaries (linux/darwin/windows × amd64/arm64):
+
+```bash
+# Linux/macOS — see the release page for the full per-version URL
+curl -L -o repo-mr-file.tar.gz \
+  https://github.com/inful/repo-mr-file/releases/latest/download/repo-mr-file_<ver>_linux_amd64.tar.gz
+tar -xzOf repo-mr-file.tar.gz repo-mr-file > /usr/local/bin/repo-mr-file
+chmod +x /usr/local/bin/repo-mr-file
+```
+
+…or `go install`:
+
 ```bash
 go install github.com/inful/repo-mr-file/cmd/repo-mr-file@latest
+```
+
+…or pull the multi-arch container image:
+
+```bash
+# Multi-arch manifest resolves to linux/amd64 or linux/arm64 automatically.
+docker pull ghcr.io/inful/repo-mr-file:latest
+docker run --rm ghcr.io/inful/repo-mr-file:latest --help
 ```
 
 …or build from source:

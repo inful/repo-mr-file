@@ -96,11 +96,50 @@ changelog:
       order: 6
 
 release:
-  # Auto-enabled on `goreleaser release` (no tag push needed for draft).
-  # Tag pushes via CI use the github_release section below to publish
-  # to https://github.com/inful/repo-mr-file/releases.
   github:
     owner: inful
     name: repo-mr-file
   prerelease: auto
-  draft: false
+
+# Builds and publishes a multi-arch Docker image to GitHub Container
+# Registry on every tag push via `docker buildx`. Same trigger as the
+# binary release - a single tag produces both the GitHub Release assets
+# AND the GHCR manifest list:
+#
+#   ghcr.io/inful/repo-mr-file:vX.Y.Z          (immutable, manifest list)
+#   ghcr.io/inful/repo-mr-file:latest          (mutable, follows most recent)
+#
+# Why dockers_v2 (since v2.12) instead of dockers (deprecated):
+#   - Single docker buildx call produces a manifest list that resolves
+#     to the right per-arch image automatically.
+#   - GoReleaser pre-builds the binaries and lays them out at
+#     builddir/linux/amd64/ and builddir/linux/arm64/ in the build
+#     context, so the Dockerfile just COPYs the matching
+#     $TARGETPLATFORM/repo-mr-file - no QEMU, no in-image `go build`.
+#   - Annotations (OCI labels) render from templates without injecting
+#     them via --label docker build flags.
+#
+# Runtime base image:
+#   gcr.io/distroless/static-debian:nonroot
+#     ~3 MB base, ships ca-certificates (required for TLS to GitHub /
+#     GitLab / Gitea), no shell, runs as uid 65532.
+dockers_v2:
+  - id: repo-mr-file
+    images:
+      - ghcr.io/inful/repo-mr-file
+    tags:
+      - "{{ .Version }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    annotations:
+      "org.opencontainers.image.title": "repo-mr-file"
+      "org.opencontainers.image.description": "Adds or updates a single file in a GitLab/GitHub/Gitea/Forgejo repo and ensures an open merge/pull request exists."
+      "org.opencontainers.image.source": "https://github.com/inful/repo-mr-file"
+      "org.opencontainers.image.url": "https://github.com/inful/repo-mr-file"
+      "org.opencontainers.image.documentation": "https://github.com/inful/repo-mr-file"
+      "org.opencontainers.image.licenses": "MIT"
+      "org.opencontainers.image.created": "{{ .Date }}"
+      "org.opencontainers.image.revision": "{{ .FullCommit }}"
+      "org.opencontainers.image.version": "{{ .Version }}"

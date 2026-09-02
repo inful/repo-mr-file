@@ -13,8 +13,14 @@ on:
 
 # `contents: write` is required for goreleaser to publish a GitHub
 # Release (creating / updating the tag, uploading the assets).
+#
+# `packages: write` is required for the goreleaser `dockers_v2:` step to
+# push the multi-arch image to GitHub Container Registry
+# (ghcr.io/inful/repo-mr-file). Without this scope the goreleaser push
+# returns a 403 against the registry.
 permissions:
   contents: write
+  packages: write
 
 # Prevent the classic tag-push race: GitHub Actions occasionally
 # fires the workflow twice for a single `git push origin vX.Y.Z`,
