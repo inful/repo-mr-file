@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/inful/repo-mr-file/internal/gitlab"
 	"github.com/inful/repo-mr-file/internal/platforms"
-	gitlabplatform "github.com/inful/repo-mr-file/internal/platforms/gitlab"
 )
 
 // ---------------------------------------------------------------------------
@@ -193,7 +193,7 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 // stubDeps constructs a Deps pointing at the mock server.
 func stubDeps(t *testing.T, mock *mockGitLab, bundle []byte, config Config) Deps {
 	t.Helper()
-	oc := gitlabplatform.NewOfficialClient(mock.URL()+"/api/v4", "test-token")
+	oc := gitlab.NewOfficialClient(mock.URL()+"/api/v4", "test-token")
 	client := platforms.WithRetry(oc, platforms.RetryConfig{MaxAttempts: 1, InitialBackoff: time.Microsecond})
 	return Deps{
 		Client: client,
@@ -511,7 +511,7 @@ func TestRun_LoggerLogsBashMirroringLines(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 
-	oc := gitlabplatform.NewOfficialClient(mock.URL()+"/api/v4", "test-token")
+	oc := gitlab.NewOfficialClient(mock.URL()+"/api/v4", "test-token")
 	deps := Deps{
 		Client: platforms.WithRetry(oc, platforms.RetryConfig{MaxAttempts: 1, InitialBackoff: time.Microsecond}),
 		Logger: logger,

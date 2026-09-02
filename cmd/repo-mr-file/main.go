@@ -22,13 +22,13 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
-	gogithub "github.com/google/go-github/v74/github"
+	gh "github.com/google/go-github/v74/github"
 
 	"github.com/inful/repo-mr-file/internal/bundler"
+	"github.com/inful/repo-mr-file/internal/gitea"
+	"github.com/inful/repo-mr-file/internal/github"
+	"github.com/inful/repo-mr-file/internal/gitlab"
 	"github.com/inful/repo-mr-file/internal/platforms"
-	giteaplatform "github.com/inful/repo-mr-file/internal/platforms/gitea"
-	githubplatform "github.com/inful/repo-mr-file/internal/platforms/github"
-	gitlabplatform "github.com/inful/repo-mr-file/internal/platforms/gitlab"
 )
 
 // buildLiveClient constructs the platform-specific Client based on
@@ -46,17 +46,17 @@ func buildLiveClient(cli *CLI, retryCfg platforms.RetryConfig) platforms.Client 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	switch cli.Platform {
 	case "github":
-		ghc := gogithub.NewClient(httpClient)
-		oc, err := githubplatform.NewClient(ghc, cli.GitHubUser, cli.APIToken, cli.APIBase)
+		ghc := gh.NewClient(httpClient)
+		oc, err := github.NewClient(ghc, cli.GitHubUser, cli.APIToken, cli.APIBase)
 		if err != nil {
 			return platforms.NewAlwaysFailingClient(fmt.Errorf("github: %w", err))
 		}
 		return platforms.WithRetry(oc, retryCfg)
 	case "gitea", "forgejo":
-		oc := giteaplatform.NewOfficialClient(cli.APIBase, cli.APIToken)
+		oc := gitea.NewOfficialClient(cli.APIBase, cli.APIToken)
 		return platforms.WithRetry(oc, retryCfg)
 	default: // "gitlab"
-		oc := gitlabplatform.NewOfficialClient(cli.APIBase, cli.APIToken)
+		oc := gitlab.NewOfficialClient(cli.APIBase, cli.APIToken)
 		return platforms.WithRetry(oc, retryCfg)
 	}
 }

@@ -27,12 +27,19 @@ func writeJSON(t *testing.T, w http.ResponseWriter, status int, body any) {
 }
 
 // newClient builds a GitHub client whose HTTP transport points at srv.
-func newClient(t *testing.T, srv *httptest.Server, token string) *Client {
+func newClient(t *testing.T, srv *httptest.Server, token string) *client {
 	t.Helper()
 	httpClient := srv.Client()
-	c, err := NewClient(github.NewClient(httpClient), "octocat", token, srv.URL+"/")
+	oc, err := NewClient(github.NewClient(httpClient), "octocat", token, srv.URL+"/")
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
+	}
+	// NewClient returns platforms.Client (the public contract);
+	// tests in this package use the concrete *client to access
+	// fields like c.user. Type-assert back here.
+	c, ok := oc.(*client)
+	if !ok {
+		t.Fatalf("NewClient returned unexpected type %T", oc)
 	}
 	return c
 }

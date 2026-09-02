@@ -36,12 +36,17 @@ import (
 
 // NewClient constructs a platforms.Client that talks to a real GitHub
 // instance. ghClient is the user-supplied go-github client (typically
-// built via github.NewClient(...)). username is the GitHub handle that
+// built via gh.NewClient(...)). username is the GitHub handle that
 // owns the token; it's used to format PR "head" fields as
 // "username:branch" (the format GitHub requires). baseURL overrides the
 // go-github default of https://api.github.com (useful for GitHub
 // Enterprise Server); pass "" to use the default.
-func NewClient(ghClient *gh.Client, username, token, baseURL string) (*Client, error) {
+//
+// Returns platforms.Client (not the concrete *Client) for symmetry
+// with gitlab.NewOfficialClient and gitea.NewOfficialClient. The
+// concrete *Client type is unexported; callers who need to access
+// fields directly (e.g. for tests) live in the same package.
+func NewClient(ghClient *gh.Client, username, token, baseURL string) (platforms.Client, error) {
 	if username == "" {
 		return nil, errors.New("github: username required for PR 'head' field formatting")
 	}
@@ -61,11 +66,14 @@ func NewClient(ghClient *gh.Client, username, token, baseURL string) (*Client, e
 			return nil, fmt.Errorf("github: invalid base URL %q: %w", baseURL, err)
 		}
 	}
-	return &Client{gh: ghClient, user: username}, nil
+	return &client{gh: ghClient, user: username}, nil
 }
 
-// Client implements platforms.Client for GitHub.
-type Client struct {
+// client implements platforms.Client for GitHub. Unexported: callers
+// reach the implementation only via NewClient, which returns the
+// platforms.Client interface. This matches gitlab.officialClient and
+// gitea.officialClient.
+type client struct {
 	gh   *gh.Client
 	user string // GitHub handle used to format PR head fields
 }
@@ -90,7 +98,7 @@ func splitRepoPath(repoPath string) (owner, repo string, err error) {
 // status code is read off the *Response header rather than parsed
 // from the error. Other API methods (CreateRef, etc.) DO return
 // *ErrorResponse and are handled by ghError.
-func (c *Client) branchExists(ctx context.Context, owner, repo, branch string) (bool, string, error) {
+func (c *client) branchExists(ctx context.Context, owner, repo, branch string) (bool, string, error) {
 	b, resp, err := c.gh.Repositories.GetBranch(ctx, owner, repo, branch, 0)
 	if err == nil {
 		return true, b.GetCommit().GetSHA(), nil
@@ -141,7 +149,7 @@ func classifyErr(op string, err error) error {
 // so the status code is read off the *Response header rather than
 // parsed from the error. Other API methods (CreateRef, etc.) DO
 // return *ErrorResponse and are handled by ghError.
-func (c *Client) CreateBranch(ctx context.Context, repoPath, newBranch, startBranch string) error {
+func (c *client) CreateBranch(ctx context.Context, repoPath, newBranch, startBranch string) error {
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateBranch", Err: err}
@@ -182,7 +190,7 @@ func (c *Client) CreateBranch(ctx context.Context, repoPath, newBranch, startBra
 // GetProject returns repository metadata (id + default_branch) so the
 // bundler can resolve a default target branch when --target-branch
 // was not specified.
-func (c *Client) GetProject(ctx context.Context, repoPath string) (*platforms.Project, error) {
+func (c *client) GetProject(ctx context.Context, repoPath string) (*platforms.Project, error) {
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "GetProject", Err: err}
@@ -200,7 +208,7 @@ func (c *Client) GetProject(ctx context.Context, repoPath string) (*platforms.Pr
 
 // GetBranch returns whether branch exists in the repo. Returns (false, nil)
 // for a 404, matching the bundler's skip-the-write semantics.
-func (c *Client) GetBranch(ctx context.Context, repoPath, branch string) (bool, error) {
+func (c *client) GetBranch(ctx context.Context, repoPath, branch string) (bool, error) {
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return false, &platforms.Error{Kind: platforms.KindConfig, Op: "GetBranch", Err: err}
@@ -223,7 +231,7 @@ func (c *Client) GetBranch(ctx context.Context, repoPath, branch string) (bool, 
 
 // GetFile returns the file at filePath on branch ref, decoding the
 // base64 content and capturing the blob SHA for stale-branch detection.
-func (c *Client) GetFile(ctx context.Context, repoPath, filePath, ref string) (*platforms.File, error) {
+func (c *client) GetFile(ctx context.Context, repoPath, filePath, ref string) (*platforms.File, error) {
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "GetFile", Err: err}
@@ -262,7 +270,7 @@ func (c *Client) GetFile(ctx context.Context, repoPath, filePath, ref string) (*
 // `startBranch` is unused here for symmetry with the platforms.Client
 // interface contract; the bundler hands it to CreateBranch at the
 // right moment.
-func (c *Client) CreateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg string, content io.Reader) error {
+func (c *client) CreateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg string, content io.Reader) error {
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateFile", Err: err}
@@ -290,7 +298,7 @@ func (c *Client) CreateFile(ctx context.Context, repoPath, branch, filePath, _, 
 //
 // As with CreateFile, the bundler guarantees the target branch
 // exists via CreateBranch beforehand — this method just does the PUT.
-func (c *Client) UpdateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg, lastCommitID string, content io.Reader) error {
+func (c *client) UpdateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg, lastCommitID string, content io.Reader) error {
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return &platforms.Error{Kind: platforms.KindConfig, Op: "UpdateFile", Err: err}
@@ -315,7 +323,7 @@ func (c *Client) UpdateFile(ctx context.Context, repoPath, branch, filePath, _, 
 // ListOpenMR returns an open MR from sourceBranch into targetBranch, or
 // nil if no such MR exists. GitHub requires head to be "user:branch";
 // we format it from the c.user field captured at construction.
-func (c *Client) ListOpenMR(ctx context.Context, repoPath, sourceBranch, targetBranch string) (*platforms.MergeRequest, error) {
+func (c *client) ListOpenMR(ctx context.Context, repoPath, sourceBranch, targetBranch string) (*platforms.MergeRequest, error) {
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "ListOpenMR", Err: err}
@@ -348,7 +356,7 @@ func (c *Client) ListOpenMR(ctx context.Context, repoPath, sourceBranch, targetB
 // CreateMR opens a new pull request from sourceBranch into targetBranch.
 // A 422 response (concurrent MR was created) is propagated as a
 // KindConflict; the bundler handles re-list-and-reuse.
-func (c *Client) CreateMR(ctx context.Context, repoPath string, in platforms.CreateMRInput) (*platforms.MergeRequest, error) {
+func (c *client) CreateMR(ctx context.Context, repoPath string, in platforms.CreateMRInput) (*platforms.MergeRequest, error) {
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return nil, &platforms.Error{Kind: platforms.KindConfig, Op: "CreateMR", Err: err}
