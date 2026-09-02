@@ -209,6 +209,53 @@ func TestOfficialClient_BadBaseURL(t *testing.T) {
 	}
 }
 
+// TestOfficialClient_CreateBranch_AlreadyExists_IsIdempotent verifies that
+// POST /repository/branches returning 400 with the
+// "has already been taken" body is treated as success. This is the
+// common case when a concurrent run beat us to the same branch.
+func TestOfficialClient_CreateBranch_AlreadyExists_IsIdempotent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		// Real-world GitLab body for duplicate branch: validation
+		// error on the `name` field with the Rails "has already
+		// been taken" phrasing. See
+		// https://docs.gitlab.com/ee/api/branches.html#create-repository-branch
+		_, _ = w.Write([]byte(`{"message":{"name":["has already been taken"]}}`))
+	}))
+	defer srv.Close()
+
+	c := NewOfficialClient(srv.URL+"/api/v4", "test-token")
+	if err := c.CreateBranch(context.Background(), "foo/bar", "new", "main"); err != nil {
+		t.Fatalf("CreateBranch: %v (idempotent 400 'already taken' must not be a hard error)", err)
+	}
+}
+
+// TestOfficialClient_CreateBranch_400_NotAlreadyTaken_IsError locks in the
+// bug fix: a 400 response whose body does NOT contain "has already been
+// taken" (e.g. invalid branch name, missing ref) must surface as a
+// real error. Previously the code treated any 400 as "already exists"
+// and silently swallowed it; that masked genuine misconfigurations.
+func TestOfficialClient_CreateBranch_400_NotAlreadyTaken_IsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		// Invalid branch name — different field, different message.
+		_, _ = w.Write([]byte(`{"message":{"branch_name":["is invalid"]}}`))
+	}))
+	defer srv.Close()
+
+	c := NewOfficialClient(srv.URL+"/api/v4", "test-token")
+	err := c.CreateBranch(context.Background(), "foo/bar", "weird name with $pecial chars", "main")
+	if err == nil {
+		t.Fatal("expected error: 400 with non-'already taken' body must not be silently swallowed")
+	}
+	e := platforms.As(err)
+	if e == nil || e.Kind != platforms.KindConfig {
+		t.Errorf("Kind = %v, want KindConfig (err = %v)", e, err)
+	}
+}
+
 func TestOfficialClient_ListOpenMR_NoResults(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(t, w, http.StatusOK, []map[string]any{})

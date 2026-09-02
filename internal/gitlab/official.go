@@ -1,6 +1,7 @@
 package gitlab
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -137,10 +138,13 @@ func (c *officialClient) UpdateFile(ctx context.Context, repoPath, branch, fileP
 // `startBranch` parameter is the parent ref name (e.g. "main").
 //
 // GitLab's API idempotency: when the branch already exists, the
-// response is 400 with a "Branch already exists" message. We treat
-// that as success because the workflow's goal (ensure the branch
-// exists) is satisfied. The bundler is idempotent at a higher level,
-// so a "Branch already exists" race during a concurrent run is fine.
+// response is 400 with a body containing "has already been taken"
+// (the Rails-style validation message on the `name` field). We
+// treat that as success because the workflow's goal (ensure the
+// branch exists) is satisfied. Other 400 responses (malformed
+// branch name, missing ref, etc.) are real errors and must NOT
+// be silently swallowed — that's why the body check matters
+// here, and why the prior "any 400 → success" code path was a bug.
 func (c *officialClient) CreateBranch(ctx context.Context, repoPath, newBranch, startBranch string) error {
 	_, _, err := c.client.Branches.CreateBranch(repoPath,
 		&gitlab.CreateBranchOptions{
@@ -149,11 +153,13 @@ func (c *officialClient) CreateBranch(ctx context.Context, repoPath, newBranch, 
 		},
 		gitlab.WithContext(ctx))
 	if err != nil {
-		// Inspect the underlying error message; the
-		// "already exists" / 400 case is benign here.
+		// "has already been taken" on a 400 means the branch
+		// exists. Treat as success.
 		var er *gitlab.ErrorResponse
-		if errors.As(err, &er) && er.Response.StatusCode == http.StatusBadRequest {
-			return nil
+		if errors.As(err, &er) && er.Response != nil && er.Response.StatusCode == http.StatusBadRequest {
+			if bytes.Contains(er.Body, []byte("has already been taken")) {
+				return nil
+			}
 		}
 		return classifyError("CreateBranch", err)
 	}

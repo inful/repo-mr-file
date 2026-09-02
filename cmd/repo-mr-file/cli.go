@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -50,9 +49,6 @@ type CLI struct {
 	// as "user:branch" (the format GitHub requires). Ignored for other
 	// platforms.
 	GitHubUser string `name:"github-user" help:"GitHub handle that owns the token (required when --platform=github)."`
-
-	// Logger is populated by the caller after parsing; not a flag.
-	Logger *slog.Logger `kong:"-"`
 }
 
 // AfterApply populates the templated defaults that reference --label and
