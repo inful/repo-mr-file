@@ -101,28 +101,34 @@ release:
     name: repo-mr-file
   prerelease: auto
 
-# Builds and publishes a multi-arch Docker image to GitHub Container
+# Builds and publishes multi-arch Docker images to GitHub Container
 # Registry on every tag push via `docker buildx`. Same trigger as the
-# binary release - a single tag produces both the GitHub Release assets
-# AND the GHCR manifest list:
+# binary release - a single tag produces both the GitHub Release
+# assets AND the GHCR manifest lists.
 #
-#   ghcr.io/inful/repo-mr-file:vX.Y.Z          (immutable, manifest list)
-#   ghcr.io/inful/repo-mr-file:latest          (mutable, follows most recent)
+#   Production image (no shell, ~3 MB base, smaller):
+#     ghcr.io/inful/repo-mr-file:vX.Y.Z          (immutable, manifest list)
+#     ghcr.io/inful/repo-mr-file:latest          (mutable, follows most recent)
+#
+#   Debug image (busybox shell + utilities, ~6 MB base):
+#     ghcr.io/inful/repo-mr-file:vX.Y.Z-debug    (immutable, manifest list)
+#     ghcr.io/inful/repo-mr-file:latest-debug    (mutable, follows most recent)
 #
 # Why dockers_v2 (since v2.12) instead of dockers (deprecated):
 #   - Single docker buildx call produces a manifest list that resolves
 #     to the right per-arch image automatically.
 #   - GoReleaser pre-builds the binaries and lays them out at
 #     builddir/linux/amd64/ and builddir/linux/arm64/ in the build
-#     context, so the Dockerfile just COPYs the matching
+#     context, so each Dockerfile just COPYs the matching
 #     $TARGETPLATFORM/repo-mr-file - no QEMU, no in-image `go build`.
 #   - Annotations (OCI labels) render from templates without injecting
 #     them via --label docker build flags.
 #
-# Runtime base image:
-#   gcr.io/distroless/static-debian:nonroot
-#     ~3 MB base, ships ca-certificates (required for TLS to GitHub /
-#     GitLab / Gitea), no shell, runs as uid 65532.
+# Runtime base images:
+#   gcr.io/distroless/static:nonroot        (production, no shell)
+#   gcr.io/distroless/static:debug-nonroot (debug, busybox + shell)
+#   Both ship ca-certificates (required for TLS to GitHub / GitLab /
+#   Gitea) and run as uid 65532.
 dockers_v2:
   - id: repo-mr-file
     images:
@@ -133,6 +139,7 @@ dockers_v2:
     platforms:
       - linux/amd64
       - linux/arm64
+    dockerfile: Dockerfile
     # SBOM attestation is enabled by default; the workflow installs
     # docker/buildx-action which provides the docker-container driver
     # that supports --attest=type=sbom.
@@ -151,3 +158,29 @@ dockers_v2:
       "index,manifest:org.opencontainers.image.created": "{{ .Date }}"
       "index,manifest:org.opencontainers.image.revision": "{{ .FullCommit }}"
       "index,manifest:org.opencontainers.image.version": "{{ .Version }}"
+
+  # Debug image. Same binary, same UID, but the runtime base is
+  # gcr.io/distroless/static:debug-nonroot which adds busybox + a
+  # shell. Lets CI jobs run the binary AND have `ls`/`cat`/etc.
+  # available without switching images, and lets operators
+  # `docker exec -it ... /busybox/sh` into a running container.
+  - id: repo-mr-file-debug
+    images:
+      - ghcr.io/inful/repo-mr-file
+    tags:
+      - "{{ .Version }}-debug"
+      - latest-debug
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    dockerfile: Dockerfile.debug
+    annotations:
+      "index,manifest:org.opencontainers.image.title": "repo-mr-file-debug"
+      "index,manifest:org.opencontainers.image.description": "Debug variant of repo-mr-file: same binary, same UID, but the runtime base (gcr.io/distroless/static:debug-nonroot) ships busybox + a shell so the image can be inspected interactively. Use this in CI jobs that want shell tools available alongside the binary, or to debug a running container with `docker exec`."
+      "index,manifest:org.opencontainers.image.source": "https://github.com/inful/repo-mr-file"
+      "index,manifest:org.opencontainers.image.url": "https://github.com/inful/repo-mr-file"
+      "index,manifest:org.opencontainers.image.documentation": "https://github.com/inful/repo-mr-file"
+      "index,manifest:org.opencontainers.image.licenses": "MIT"
+      "index,manifest:org.opencontainers.image.created": "{{ .Date }}"
+      "index,manifest:org.opencontainers.image.revision": "{{ .FullCommit }}"
+      "index,manifest:org.opencontainers.image.version": "{{ .Version }}-debug"

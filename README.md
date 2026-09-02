@@ -33,6 +33,29 @@ docker pull ghcr.io/inful/repo-mr-file:latest
 docker run --rm ghcr.io/inful/repo-mr-file:latest --help
 ```
 
+Two image variants are published per release:
+
+| Tag suffix | Base image | Shell | Size (approx) | Use case |
+|---|---|---|---|---|
+| `:vX.Y.Z` (or `:latest`) | `gcr.io/distroless/static:nonroot` | none | ~5 MB | Production. Default for `docker run` and Kubernetes. |
+| `:vX.Y.Z-debug` (or `:latest-debug`) | `gcr.io/distroless/static:debug-nonroot` | busybox | ~8 MB | CI jobs that want `ls` / `cat` / `env` available alongside the binary, or operators who need `docker exec -it <container> /busybox/sh` for debugging. |
+
+The debug image has the same binary, the same `nonroot` UID, the
+same OCI labels, and the same `ENTRYPOINT`. It is a drop-in
+replacement for the production image when the user explicitly
+opts in with the `-debug` tag. Use it in CI pipelines like:
+
+```yaml
+# .gitlab-ci.yml (or any container-based CI)
+my-job:
+  image: ghcr.io/inful/repo-mr-file:latest-debug
+  script:
+    - repo-mr-file --help                          # the binary
+    - ls /                                          # inspect the image
+    - cat /etc/os-release                           # check the base
+    - env | sort | grep -i api                      # see inherited env
+```
+
 …or build from source:
 
 ```bash
