@@ -218,16 +218,59 @@ func TestGitea_UpdateFile_Conflict_ClassifiedAsConflict(t *testing.T) {
 }
 
 func TestGitea_ListOpenMR_Found(t *testing.T) {
+	// Exercise the array-response path: by-base-head returns an array
+	// (some older Gitea shapes), the client falls back to the LIST
+	// endpoint with head+base query params to find the matching PR.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v1/repos/foo/bar/pulls/main/update-v1":
+			// First attempt (by-base-head) returns an array instead of
+			// the singleton object the client prefers. Client falls
+			// through to the LIST path.
+			writeJSON(t, w, http.StatusOK, []map[string]any{
+				{"id": 88, "number": 88, "html_url": "https://gitea.example.com/foo/bar/pulls/88"},
+			})
+		case strings.HasPrefix(r.URL.Path, "/api/v1/repos/foo/bar/pulls"):
+			// LIST fallback: client gets the array directly.
+			writeJSON(t, w, http.StatusOK, []map[string]any{
+				{"id": 88, "number": 88, "html_url": "https://gitea.example.com/foo/bar/pulls/88"},
+			})
+		default:
+			t.Errorf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewOfficialClient(srv.URL, "test-token")
+	mr, err := c.ListOpenMR(context.Background(), "foo/bar", "update-v1", "main")
+	if err != nil {
+		t.Fatalf("ListOpenMR: %v", err)
+	}
+	if mr == nil {
+		t.Fatal("expected MR, got nil")
+	}
+	if mr.IID != 88 {
+		t.Errorf("IID = %d, want 88", mr.IID)
+	}
+	if mr.WebURL != "https://gitea.example.com/foo/bar/pulls/88" {
+		t.Errorf("WebURL = %q, want expected URL", mr.WebURL)
+	}
+}
+
+// TestGitea_ListOpenMR_Found_SingleObject exercises the single-object
+// response shape that real Gitea/Forgejo instances return from the
+// dedicated /pulls/{base}/{head} endpoint. Other Gitea versions
+// returned a list; this test guards against regression in the
+// primary (currently-observed) shape.
+func TestGitea_ListOpenMR_Found_SingleObject(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/pulls/main/update-v1") {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
-		writeJSON(t, w, http.StatusOK, []map[string]any{
-			{
-				"id":       88,
-				"number":   88,
-				"html_url": "https://gitea.example.com/foo/bar/pulls/88",
-			},
+		writeJSON(t, w, http.StatusOK, map[string]any{
+			"id":       88,
+			"number":   88,
+			"html_url": "https://gitea.example.com/foo/bar/pulls/88",
 		})
 	}))
 	defer srv.Close()

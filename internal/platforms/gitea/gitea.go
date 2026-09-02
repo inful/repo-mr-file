@@ -35,8 +35,15 @@ import (
 // root (e.g. https://gitea.example.com/api/v1); token is a personal
 // access token with repo scope.
 func NewOfficialClient(baseURL, token string) platforms.Client {
+	// The README tells users to pass --api-base as e.g.
+	// "https://host/api/v1" (with the /api/v1 suffix included).
+	// All internal request paths then re-add "/api/v1/<route>",
+	// which would double up. Strip any trailing /api/v1 the user
+	// supplied so we end up with the API root exactly once.
+	root := strings.TrimRight(baseURL, "/")
+	root = strings.TrimSuffix(root, "/api/v1")
 	return &officialClient{
-		baseURL: strings.TrimRight(baseURL, "/"),
+		baseURL: root,
 		token:   token,
 		http:    &http.Client{},
 	}
@@ -215,16 +222,44 @@ func (c *officialClient) UpdateFile(ctx context.Context, repoPath, branch, fileP
 func (c *officialClient) ListOpenMR(ctx context.Context, repoPath, sourceBranch, targetBranch string) (*platforms.MergeRequest, error) {
 	// Gitea has a dedicated lookup-by-base-head endpoint. 404 → no match.
 	path := "/api/v1/repos/" + repoPath + "/pulls/" + url.PathEscape(targetBranch) + "/" + url.PathEscape(sourceBranch)
+	// Real-world: this endpoint returns a SINGLE PR object on success
+	// (not an array as the docs imply). e.g.
+	//   {"id":507,"number":1,"html_url":"...","title":"..."}
+	// Earlier versions of Gitea returned [PR]; newer ones return {PR}.
+	// We accept either form for forward/backward compatibility.
+	var single struct {
+		ID      int    `json:"id"`
+		Number  int    `json:"number"`
+		HTMLURL string `json:"html_url"`
+	}
+	err := c.do(ctx, http.MethodGet, path, nil, &single)
+	if err == nil {
+		if single.Number == 0 {
+			return nil, nil
+		}
+		return &platforms.MergeRequest{
+			IID:          single.Number,
+			SourceBranch: sourceBranch,
+			TargetBranch: targetBranch,
+			WebURL:       single.HTMLURL,
+		}, nil
+	}
+	// Some Gitea versions return 404 / empty for "not found", but the
+	// docs and older versions also returned a 200 with []. Try the
+	// array fallback when the single-decode failed.
+	if e := platforms.As(err); e != nil && e.Kind == platforms.KindNotFound {
+		return nil, nil
+	}
+	// Otherwise: fall back to the array fallback (older / differently-shaped).
 	var prs []struct {
 		ID      int    `json:"id"`
 		Number  int    `json:"number"`
 		HTMLURL string `json:"html_url"`
 	}
-	err := c.do(ctx, http.MethodGet, path, nil, &prs)
-	if err != nil {
-		if e := platforms.As(err); e != nil && e.Kind == platforms.KindNotFound {
-			return nil, nil
-		}
+	listPath := "/api/v1/repos/" + repoPath + "/pulls?state=open&base=" + url.QueryEscape(targetBranch) + "&head=" + url.QueryEscape(sourceBranch) + "&limit=1"
+	lerr := c.do(ctx, http.MethodGet, listPath, nil, &prs)
+	if lerr != nil {
+		// Original error is the more specific signal.
 		return nil, err
 	}
 	if len(prs) == 0 {
@@ -239,6 +274,9 @@ func (c *officialClient) ListOpenMR(ctx context.Context, repoPath, sourceBranch,
 	}, nil
 }
 
+
+// IsNotFound is exposed at the package level for the by-base-head
+// decoder to use.
 func (c *officialClient) CreateMR(ctx context.Context, repoPath string, in platforms.CreateMRInput) (*platforms.MergeRequest, error) {
 	body := map[string]string{
 		"head":  in.SourceBranch,
