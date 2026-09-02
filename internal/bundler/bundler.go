@@ -24,8 +24,8 @@ import (
 // Log message templates. The bash script this binary replaces emitted
 // specific echo lines that operators may grep for in CI logs; these
 // constants capture those lines verbatim so callers can format them
-// with fmt.Sprintf. Keep them stable — the README documents the
-// expected log output for each step.
+// with fmt.Sprintf. Keep them stable — operators may grep for them
+// in pipeline output.
 //
 // These used to live in a dedicated internal/logging package; they
 // moved here because only the bundler emits them.

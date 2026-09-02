@@ -11,15 +11,13 @@
 # Multi-arch notes:
 #   - $TARGETPLATFORM is the runtime platform the image is built for;
 #     buildx resolves it at build time per architecture.
-#   - The base image (distroless/static-debian) is a manifest list, so
-#     buildx pulls the right arch variant automatically.
+#   - The base image (gcr.io/distroless/static:nonroot) is a manifest
+#     list, so buildx pulls the right arch variant automatically.
 #
 # Runtime base:
 #   - gcr.io/distroless/static:nonroot ships ca-certificates
 #     (required for TLS to GitHub/GitHub Enterprise/GitLab/Gitea) and
-#     nothing else. Runs as uid 65532 by default. The older
-#     `:static-debian:nonroot` tag is no longer present on
-#     gcr.io/distroless; use the de-debianized `:static:`.
+#     nothing else. Runs as uid 65532 by default.
 
 FROM gcr.io/distroless/static:nonroot AS runtime
 

@@ -24,7 +24,7 @@ builds:
       - -trimpath
     ldflags:
       # -s strips the symbol table; -w strips DWARF debug info.
-      # Combined: 15.4 MB stripped binary locally.
+      # Combined: ~15.8 MB stripped binary (v0.9.6 release tarball).
       - -s -w
     goos:
       - linux
@@ -146,9 +146,13 @@ dockers_v2:
     annotations:
       # `index:` scope applies each annotation to the manifest list
       # (the multi-platform tag itself), which makes them visible to
-      # `docker buildx imagetools inspect` and registry UIs. Now that
-      # we use the docker-container driver, index: annotations are
-      # accepted.
+      # `docker buildx imagetools inspect` and registry UIs. The
+      # release workflow's docker-container driver accepts
+      # index: annotations on per-platform builds; a local
+      # `goreleaser release --snapshot` run with the default
+      # `docker` driver will reject them with "index annotations
+      # not supported for single platform export" — that's a
+      # snapshot-mode limitation, not a config bug.
       "index,manifest:org.opencontainers.image.title": "repo-mr-file"
       "index,manifest:org.opencontainers.image.description": "Adds or updates a single file in a GitLab/GitHub/Gitea/Forgejo repo and ensures an open merge/pull request exists."
       "index,manifest:org.opencontainers.image.source": "https://github.com/inful/repo-mr-file"

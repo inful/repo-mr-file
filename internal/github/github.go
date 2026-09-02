@@ -13,8 +13,7 @@
 // platforms.Client interface before any file POST. GitHub's PUT
 // /contents auto-creates branches on *empty* repos, but returns
 // "404 Branch not found" on populated repos, so the explicit
-// CreateRef is required for the populated-repo case (which the
-// README oversimplified as "implicit via branch on PUT file").
+// CreateRef is required for the populated-repo case.
 //
 // Pull request "head" must be in "user:branch" form. The bundler doesn't
 // know the GitHub user, so the client constructor takes a username

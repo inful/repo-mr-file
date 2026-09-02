@@ -158,8 +158,10 @@ func applyJitter(d time.Duration, jitter float64, r *rand.Rand) time.Duration {
 }
 
 // ---------------------------------------------------------------------------
-// Package-private RNG for jitter, seeded lazily. Tests should pass their
-// own *rand.Rand via RetryConfig.Rand for determinism.
+// Package-private RNG for jitter. The seed (defaultRandNow) is captured
+// once at package init from time.Now(); the *rand.Rand source itself
+// (defaultRandSrc) is created lazily on first use. Tests should pass
+// their own *rand.Rand via RetryConfig.Rand for determinism.
 // ---------------------------------------------------------------------------
 
 var (
