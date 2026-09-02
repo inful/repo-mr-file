@@ -164,33 +164,18 @@ func (c *officialClient) CreateBranch(ctx context.Context, repoPath, newBranch, 
 	return err
 }
 
-func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, filePath, startBranch, commitMsg string, content io.Reader) error {
-	// Gitea doesn't auto-create the branch on POST /contents. If the
-	// branch doesn't exist, create it from the parent first. The
-	// bundler passes the project's default branch as startBranch.
-	exists, err := c.GetBranch(ctx, repoPath, branch)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		// Fallback chain: bundler-supplied startBranch (project
-		// default branch) wins; otherwise look it up via GetProject.
-		targetBranch := startBranch
-		if targetBranch == "" {
-			proj, perr := c.GetProject(ctx, repoPath)
-			if perr == nil {
-				targetBranch = proj.DefaultBranch
-			}
-		}
-		if targetBranch == "" {
-			return platforms.New(platforms.KindConfig, "CreateFile",
-				fmt.Errorf("cannot derive parent branch for fresh branch %q", branch))
-		}
-		if err := c.CreateBranch(ctx, repoPath, branch, targetBranch); err != nil {
-			return err
-		}
-	}
-
+// CreateFile creates a new file at filePath on branch. The caller must
+// have ensured the branch exists via CreateBranch first; unlike GitLab
+// and GitHub, Gitea does not auto-create the branch on POST /contents.
+// The bundler satisfies this contract in step 3 (CreateBranch) before
+// calling CreateFile in step 5.
+//
+// `startBranch` is unused here for symmetry with the platforms.Client
+// interface contract; the bundler hands it to CreateBranch at the
+// right moment. GitLab's CreateFile is the only implementation that
+// actually consumes it (for the implicit-branch-create on POST
+// /repository/files).
+func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg string, content io.Reader) error {
 	contentBytes, err := io.ReadAll(content)
 	if err != nil {
 		return platforms.New(platforms.KindConfig, "CreateFile", err)

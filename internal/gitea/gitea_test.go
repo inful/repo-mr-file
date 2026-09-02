@@ -93,91 +93,43 @@ func TestGitea_GetFile_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestGitea_CreateFile_CreatesBranchFirst(t *testing.T) {
-	var createdBranch, createdFile bool
+func TestGitea_CreateFile_HappyPath(t *testing.T) {
+	// The bundler is responsible for calling CreateBranch before
+	// CreateFile (see the platforms.Client interface comment and
+	// bundler.Run step 3). This test exercises the CreateFile path
+	// assuming the branch already exists — the same assumption the
+	// bundler relies on. Coverage for the CreateBranch flow lives in
+	// TestGitea_CreateBranch_*
+	var seenMethod, seenPath, seenBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/foo/bar":
-			// GetProject — needed to find the default branch to branch from
-			writeJSON(t, w, http.StatusOK, map[string]any{
-				"id":             1,
-				"default_branch": "main",
-			})
-		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/branches/update-v1"):
-			// GetBranch → 404, branch doesn't exist yet
-			writeJSON(t, w, http.StatusNotFound, map[string]any{"message": "404"})
-		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/branches"):
-			// CreateBranch
-			createdBranch = true
-			body, _ := io.ReadAll(r.Body)
-			if !strings.Contains(string(body), `"new_branch_name":"update-v1"`) {
-				t.Errorf("CreateBranch body missing new_branch_name: %s", body)
-			}
-			if !strings.Contains(string(body), `"old_branch_name":"main"`) {
-				t.Errorf("CreateBranch body missing old_branch_name=main: %s", body)
-			}
-			writeJSON(t, w, http.StatusCreated, map[string]any{"name": "update-v1"})
-		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/contents/"):
-			// CreateFile
-			createdFile = true
-			body, _ := io.ReadAll(r.Body)
-			if !strings.Contains(string(body), `"content":"aGVsbG8K"`) {
-				t.Errorf("body missing base64-encoded content: %s", body)
-			}
-			if !strings.Contains(string(body), `"branch":"update-v1"`) {
-				t.Errorf("body missing branch: %s", body)
-			}
-			writeJSON(t, w, http.StatusCreated, map[string]any{"content": map[string]any{"name": "ca.pem"}})
-		default:
-			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		seenMethod = r.Method
+		seenPath = r.URL.Path
+		body, _ := io.ReadAll(r.Body)
+		seenBody = string(body)
+		writeJSON(t, w, http.StatusCreated, map[string]any{
+			"content": map[string]any{"name": "ca.pem"},
+		})
 	}))
 	defer srv.Close()
 
 	c := NewOfficialClient(srv.URL, "test-token")
-	err := c.CreateFile(context.Background(), "foo/bar", "update-v1", "ca.pem", "main", "msg", strings.NewReader("hello\n"))
-	if err != nil {
+	if err := c.CreateFile(context.Background(), "foo/bar", "update-v1", "ca.pem", "main", "msg", strings.NewReader("hello\n")); err != nil {
 		t.Fatalf("CreateFile: %v", err)
 	}
-	if !createdBranch {
-		t.Error("expected CreateBranch to be called before CreateFile")
+	if seenMethod != http.MethodPost {
+		t.Errorf("method = %q, want POST", seenMethod)
 	}
-	if !createdFile {
-		t.Error("expected CreateFile to be called")
+	if !strings.HasSuffix(seenPath, "/api/v1/repos/foo/bar/contents/ca.pem") {
+		t.Errorf("path = %q, want /contents/ca.pem suffix", seenPath)
 	}
-}
-
-func TestGitea_CreateFile_BranchAlreadyExists_SkipsCreateBranch(t *testing.T) {
-	var createdBranch, createdFile bool
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/branches/update-v1"):
-			// GetBranch → 200, branch exists; skip CreateBranch
-			writeJSON(t, w, http.StatusOK, map[string]any{"name": "update-v1"})
-		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/branches"):
-			createdBranch = true
-			writeJSON(t, w, http.StatusInternalServerError, map[string]any{"message": "should not be called"})
-		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/contents/"):
-			createdFile = true
-			writeJSON(t, w, http.StatusCreated, map[string]any{"content": map[string]any{"name": "ca.pem"}})
-		default:
-			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	}))
-	defer srv.Close()
-
-	c := NewOfficialClient(srv.URL, "test-token")
-	err := c.CreateFile(context.Background(), "foo/bar", "update-v1", "ca.pem", "main", "msg", strings.NewReader("hello"))
-	if err != nil {
-		t.Fatalf("CreateFile: %v", err)
+	if !strings.Contains(seenBody, `"branch":"update-v1"`) {
+		t.Errorf("body missing branch: %s", seenBody)
 	}
-	if createdBranch {
-		t.Error("CreateBranch should NOT have been called (branch already exists)")
+	if !strings.Contains(seenBody, `"content":"aGVsbG8K"`) {
+		t.Errorf("body missing base64-encoded content: %s", seenBody)
 	}
-	if !createdFile {
-		t.Error("CreateFile should have been called")
+	if !strings.Contains(seenBody, `"message":"msg"`) {
+		t.Errorf("body missing message: %s", seenBody)
 	}
 }
 
