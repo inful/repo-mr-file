@@ -166,20 +166,20 @@ func TestCLI_BoolFlags(t *testing.T) {
 func TestCLI_AfterApplyTemplating(t *testing.T) {
 	bundle := writeBundle(t)
 	cli := mustParseCLI(t,
-		"--tag=v9.9.9", "--repo=r", "--target-path=c", "--source-path="+bundle, "--gitlab-token=tk",
+		"--tag=v9.9.9", "--repo=r", "--target-path=docs/ips.txt", "--source-path="+bundle, "--gitlab-token=tk",
 	)
 
-	if got, want := cli.BranchName, "chore/update-ca-bundle-v9.9.9"; got != want {
+	if got, want := cli.BranchName, "update-v9.9.9"; got != want {
 		t.Errorf("BranchName = %q, want %q", got, want)
 	}
-	if got, want := cli.CommitMessage, "chore: update CA certificate bundle from custom-certs v9.9.9"; got != want {
+	if got, want := cli.CommitMessage, "Update docs/ips.txt to release v9.9.9"; got != want {
 		t.Errorf("CommitMessage = %q, want %q", got, want)
 	}
 	if cli.MRTitle != cli.CommitMessage {
 		t.Errorf("MRTitle = %q, want %q (defaulted from CommitMessage)", cli.MRTitle, cli.CommitMessage)
 	}
-	if !strings.Contains(cli.MRDescription, "v9.9.9") {
-		t.Errorf("MRDescription = %q, want to contain TAG", cli.MRDescription)
+	if got, want := cli.MRDescription, "Updates docs/ips.txt from release v9.9.9."; got != want {
+		t.Errorf("MRDescription = %q, want %q", got, want)
 	}
 }
 

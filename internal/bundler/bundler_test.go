@@ -191,9 +191,9 @@ func defaultConfig() Config {
 		Repo:          "foo/bar",
 		TargetPath:    "ca.pem",
 		TargetBranch:  "main",
-		BranchName:    "chore/update-ca-bundle-v1.2.3",
-		CommitMessage: "chore: update CA bundle",
-		MRTitle:       "chore: update CA bundle",
+		BranchName:    "update-v1.2.3",
+		CommitMessage: "Update ca.pem to release v1.2.3",
+		MRTitle:       "Update ca.pem to release v1.2.3",
 		MRDescription: "test description",
 	}
 }
@@ -492,7 +492,7 @@ func TestRun_LoggerLogsBashMirroringLines(t *testing.T) {
 		"Getting project info for foo/bar",
 		"Found project ID: 42",
 		"Using target branch: main",
-		"Checking if branch chore/update-ca-bundle-v1.2.3 exists",
+		"Checking if branch update-v1.2.3 exists",
 		"Branch does not exist, will create from main",
 		"Creating ca.pem in foo/bar",
 		"File POST completed in branch",

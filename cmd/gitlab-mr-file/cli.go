@@ -47,23 +47,26 @@ type CLI struct {
 	Logger *slog.Logger `kong:"-"`
 }
 
-// AfterApply populates the templated defaults that reference --tag and derives
-// --gitlab-url from --gitlab-api. Kong invokes this after command-line values
-// have been applied and validation has succeeded.
+// AfterApply populates the templated defaults that reference --tag and
+// derives --gitlab-url from --gitlab-api. Kong invokes this after
+// command-line values have been applied and validation has succeeded.
+//
+// Templates are deliberately generic: the tool isn't tied to any one
+// workflow. Override any of these via flags for project-specific wording.
 func (c *CLI) AfterApply() error {
 	if c.BranchName == "" {
-		c.BranchName = fmt.Sprintf("chore/update-ca-bundle-%s", c.Tag)
+		c.BranchName = fmt.Sprintf("update-%s", c.Tag)
 	}
 	if c.CommitMessage == "" {
-		c.CommitMessage = fmt.Sprintf("chore: update CA certificate bundle from custom-certs %s", c.Tag)
+		c.CommitMessage = fmt.Sprintf("Update %s to release %s", c.TargetPath, c.Tag)
 	}
 	if c.MRTitle == "" {
 		c.MRTitle = c.CommitMessage
 	}
 	if c.MRDescription == "" {
 		c.MRDescription = fmt.Sprintf(
-			"Updates the certificate bundle with the latest from the custom-certs release.\n\nGenerated from: custom-certs %s\nCA bundle source: https://gitlab.mgmlab.net/seksjon-for-bioinformatikk/custom-certs/-/releases/%s",
-			c.Tag, c.Tag,
+			"Updates %s from release %s.",
+			c.TargetPath, c.Tag,
 		)
 	}
 	if c.GitLabURL == "" {
