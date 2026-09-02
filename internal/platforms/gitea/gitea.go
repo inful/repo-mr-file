@@ -274,9 +274,6 @@ func (c *officialClient) ListOpenMR(ctx context.Context, repoPath, sourceBranch,
 	}, nil
 }
 
-
-// IsNotFound is exposed at the package level for the by-base-head
-// decoder to use.
 func (c *officialClient) CreateMR(ctx context.Context, repoPath string, in platforms.CreateMRInput) (*platforms.MergeRequest, error) {
 	body := map[string]string{
 		"head":  in.SourceBranch,
