@@ -30,27 +30,64 @@ jobs:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # GitHub Packages endpoint for user-scoped container packages.
-          # PATCH with body { "visibility": "public" } promotes visibility.
-          # User-scoped package endpoint (the owner is the authenticated user,
-          # not the username in the URL). User endpoint: /user/packages/{type}/{name}.
-          # Org endpoint (if owner were an org) would be /orgs/{org}/packages/{type}/{name}.
-          URL="https://api.github.com/user/packages/container/repo-mr-file"
-          echo "Promoting ${URL} to public..."
-          curl -sS -X PATCH \
-            -H "Authorization: Bearer ${TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            -d '{"visibility":"public"}' \
-            "${URL}" \
-            | python3 -m json.tool
 
-          # Smoke check: anonymous GET should now succeed with auth challenges
-          # absorbed (manifest fetched).
+          # First: probe every documented path so we know which one
+          # resolves for the user-scoped package uploaded by goreleaser.
+          echo "--- probe ---"
+          for url in \
+            "https://api.github.com/user/packages/container/repo-mr-file" \
+            "https://api.github.com/users/inful/packages/container/repo-mr-file" \
+            "https://api.github.com/orgs/inful/packages/container/repo-mr-file" \
+            "https://api.github.com/repos/inful/repo-mr-file/packages/container/repo-mr-file"; do
+            code=$(curl -sIL -o /dev/null -w "%{http_code}" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${url}")
+            echo "  GET ${url} → HTTP ${code}"
+          done
+
+          # Second: try POST /user/packages/{type}/{name}/restore with
+          # no body — if the package exists but returns 404 on GET due
+          # to some scope edge case, restore might return success or
+          # a more specific error.
           echo ""
-          echo "Smoke check via ghcr.io (anonymous):"
+          echo "--- restore attempts ---"
+          for url in \
+            "https://api.github.com/user/packages/container/repo-mr-file/restore" \
+            "https://api.github.com/users/inful/packages/container/repo-mr-file/restore"; do
+            code=$(curl -sIL -o /dev/null -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${url}")
+            echo "  POST ${url} → HTTP ${code}"
+          done
+
+          # Third: every documented PATCH path. Whichever one returns
+          # 200 or 204 is the canonical one; 404 means the package
+          # does not exist at that scope.
+          echo ""
+          echo "--- patch attempts ---"
+          for url in \
+            "https://api.github.com/user/packages/container/repo-mr-file" \
+            "https://api.github.com/users/inful/packages/container/repo-mr-file" \
+            "https://api.github.com/orgs/inful/packages/container/repo-mr-file"; do
+            resp=$(curl -sS -X PATCH \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -d '{"visibility":"public"}' \
+              "${url}")
+            code=$(echo "$resp" | python3 -c 'import json,sys;d=json.loads(sys.stdin.read() or "{}");print(d.get("visibility",d.get("message","?")))' 2>/dev/null || echo "?")
+            echo "  PATCH ${url} → ${code}"
+          done
+
+          # Smoke check: anonymous GHCR pull now or 401
+          echo ""
+          echo "--- anonymous pull smoke check ---"
           for tag in latest 0.1.0-rc4; do
-            hdrs=$(curl -sI -o /dev/null -w "%{http_code}" \
+            code=$(curl -sIL -o /dev/null -w "%{http_code}" \
               "https://ghcr.io/v2/inful/repo-mr-file/manifests/${tag}")
-            echo "  ghcr.io/inful/repo-mr-file:${tag} → HTTP ${hdrs}"
+            echo "  ghcr.io/inful/repo-mr-file:${tag} → HTTP ${code}"
           done
