@@ -142,12 +142,20 @@ dockers_v2:
     # --driver docker-container`).
     sbom: false
     annotations:
-      "org.opencontainers.image.title": "repo-mr-file"
-      "org.opencontainers.image.description": "Adds or updates a single file in a GitLab/GitHub/Gitea/Forgejo repo and ensures an open merge/pull request exists."
-      "org.opencontainers.image.source": "https://github.com/inful/repo-mr-file"
-      "org.opencontainers.image.url": "https://github.com/inful/repo-mr-file"
-      "org.opencontainers.image.documentation": "https://github.com/inful/repo-mr-file"
-      "org.opencontainers.image.licenses": "MIT"
-      "org.opencontainers.image.created": "{{ .Date }}"
-      "org.opencontainers.image.revision": "{{ .FullCommit }}"
-      "org.opencontainers.image.version": "{{ .Version }}"
+      # `manifest,manifest-descriptor:` scope applies each annotation to
+      # every per-platform image manifest (and its descriptor) instead
+      # of the multi-arch index. The legacy `docker` buildx driver on
+      # GitHub-hosted runners doesn't accept `index:` annotations.
+      # Once we move to the docker-container driver
+      # (docker/setup-buildx-action@v3 in the release workflow) we can
+      # scope to `index:` so consumers see the labels at the manifest
+      # list level.
+      "manifest,manifest-descriptor:org.opencontainers.image.title": "repo-mr-file"
+      "manifest,manifest-descriptor:org.opencontainers.image.description": "Adds or updates a single file in a GitLab/GitHub/Gitea/Forgejo repo and ensures an open merge/pull request exists."
+      "manifest,manifest-descriptor:org.opencontainers.image.source": "https://github.com/inful/repo-mr-file"
+      "manifest,manifest-descriptor:org.opencontainers.image.url": "https://github.com/inful/repo-mr-file"
+      "manifest,manifest-descriptor:org.opencontainers.image.documentation": "https://github.com/inful/repo-mr-file"
+      "manifest,manifest-descriptor:org.opencontainers.image.licenses": "MIT"
+      "manifest,manifest-descriptor:org.opencontainers.image.created": "{{ .Date }}"
+      "manifest,manifest-descriptor:org.opencontainers.image.revision": "{{ .FullCommit }}"
+      "manifest,manifest-descriptor:org.opencontainers.image.version": "{{ .Version }}"
