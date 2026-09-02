@@ -65,15 +65,25 @@ type Result struct {
 //     exists, or if source==target (no MR needed at all). Otherwise
 //     create the MR; reuse it if the call fails with 422 because a
 //     concurrent run beat us to it.
-func Run(ctx context.Context, deps Deps) (Result, error) {
+//
+// The same code path drives both live mode and --dry-run: deps.Client
+// is the dryRunClient when --dry-run is set, which returns KindNotFound
+// for GetFile (forcing the POST path) and a fake WebURL for CreateMR.
+// Result.DryRun is populated from deps.DryRun via the deferred
+// assignment at the top of Run.
+func Run(ctx context.Context, deps Deps) (result Result, err error) {
 	logger := deps.Logger
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-
-	if deps.DryRun {
-		return runDry(ctx, logger, deps)
-	}
+	defer func() {
+		// Stamp DryRun on the returned value (including the zero Result
+		// returned with an error) so callers can distinguish a dry-run
+		// pass from a live pass without checking the input. The error
+		// path also gets a DryRun=true stamp if applicable, but no
+		// caller reads Result on error — see run() in cmd/repo-mr-file.
+		result.DryRun = deps.DryRun
+	}()
 
 	// Step 1: project.
 	logger.Info(fmt.Sprintf(logging.MsgGettingProjectInfo, deps.Config.Repo))
@@ -222,51 +232,4 @@ func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, sour
 	}
 	logger.Info(fmt.Sprintf(logging.MsgFileUpdated, "PUT", deps.Config.BranchName))
 	return true, file.LastCommitID, nil
-}
-
-// runDry simulates the workflow when --dry-run is set: it uses a client
-// that records every call without making real requests, and logs each
-// intended step.
-func runDry(ctx context.Context, logger *slog.Logger, deps Deps) (Result, error) {
-	if logger == nil {
-		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	}
-	logger.Info(fmt.Sprintf(logging.MsgGettingProjectInfo, deps.Config.Repo))
-	logger.Info(fmt.Sprintf(logging.MsgCheckingBranch, deps.Config.BranchName))
-	logger.Info(fmt.Sprintf(logging.MsgBranchDoesNotExist, deps.Config.TargetBranch))
-
-	// Drive the dry-run client through the same code path so the recorded
-	// call sequence matches what live mode would do.
-	if _, err := deps.Client.GetProject(ctx, deps.Config.Repo); err != nil {
-		return Result{}, err
-	}
-	if _, err := deps.Client.GetBranch(ctx, deps.Config.Repo, deps.Config.BranchName); err != nil {
-		return Result{}, err
-	}
-	if _, err := deps.Client.GetFile(ctx, deps.Config.Repo, deps.Config.TargetPath, deps.Config.TargetBranch); err != nil {
-		// Dry-run client returns a synthetic KindNotFound; that's fine.
-		if e := platforms.As(err); e == nil || e.Kind != platforms.KindNotFound {
-			return Result{}, err
-		}
-	}
-	logger.Info(fmt.Sprintf(logging.MsgCreatingFile, deps.Config.TargetPath, deps.Config.Repo))
-	if err := deps.Client.CreateFile(ctx, deps.Config.Repo,
-		deps.Config.BranchName, deps.Config.TargetPath,
-		deps.Config.TargetBranch, // startBranch (parent) for fresh branches
-		deps.Config.CommitMessage, bytes.NewReader(deps.Source)); err != nil {
-		return Result{}, err
-	}
-	logger.Info(fmt.Sprintf(logging.MsgFileUpdated, "POST", deps.Config.BranchName))
-	logger.Info(logging.MsgCreatingMR)
-	mr, err := deps.Client.CreateMR(ctx, deps.Config.Repo, platforms.CreateMRInput{
-		SourceBranch: deps.Config.BranchName,
-		TargetBranch: deps.Config.TargetBranch,
-		Title:        deps.Config.MRTitle,
-		Description:  deps.Config.MRDescription,
-	})
-	if err != nil {
-		return Result{}, err
-	}
-	logger.Info(fmt.Sprintf(logging.MsgMRCreated, mr.WebURL))
-	return Result{DryRun: true, MRURL: mr.WebURL}, nil
 }
