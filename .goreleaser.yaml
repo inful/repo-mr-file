@@ -133,6 +133,14 @@ dockers_v2:
     platforms:
       - linux/amd64
       - linux/arm64
+    # Disable the SBOM attestation: GoReleaser adds --attest=type=sbom
+    # by default, but GitHub-hosted runners ship the legacy `docker`
+    # buildx driver which doesn't support attestations. SBOMs are a
+    # nice-to-have; we can re-enable this once buildx on the runners
+    # is updated to the docker-container driver (the documented
+    # set-up is `docker buildx create --use --name=goreleaser-builder
+    # --driver docker-container`).
+    sbom: false
     annotations:
       "org.opencontainers.image.title": "repo-mr-file"
       "org.opencontainers.image.description": "Adds or updates a single file in a GitLab/GitHub/Gitea/Forgejo repo and ensures an open merge/pull request exists."
