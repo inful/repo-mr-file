@@ -323,3 +323,49 @@ func TestClassifyError(t *testing.T) {
 		})
 	}
 }
+
+// TestClassifyError_AuthHints locks in the GitLab auth hint
+// classification. GitLab's response body doesn't carry a structured
+// token-state signal, so the hint is a 401-vs-403 split: 401 says
+// the token is bad/expired/revoked; 403 says the token is valid but
+// under-scoped. The kind stays KindAuth (exit 3) across both cases.
+func TestClassifyError_AuthHints(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		message string
+		wantSub string
+	}{
+		{"401", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, "401 Unauthorized"},
+		{"403", http.StatusForbidden, `{"message":"403 Forbidden"}`, "403 Forbidden"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := &http.Response{
+				StatusCode: tc.status,
+				Header:     http.Header{},
+				Body:       io.NopCloser(strings.NewReader(tc.message)),
+			}
+			err := &gitlab.ErrorResponse{Response: resp, Message: tc.message}
+			got := classifyError("GetProject", err)
+			e := platforms.As(got)
+			if e == nil {
+				t.Fatalf("expected *platforms.Error, got %v", got)
+			}
+			if e.Kind != platforms.KindAuth {
+				t.Errorf("Kind = %v, want KindAuth", e.Kind)
+			}
+			if e.StatusCode != tc.status {
+				t.Errorf("StatusCode = %d, want %d", e.StatusCode, tc.status)
+			}
+			if !strings.Contains(e.Hint, tc.wantSub) {
+				t.Errorf("Hint = %q, want substring %q", e.Hint, tc.wantSub)
+			}
+			// Hint must replace the underlying message so the
+			// operator reads the diagnostic.
+			if !strings.Contains(got.Error(), tc.wantSub) {
+				t.Errorf("Error() = %q, want substring %q", got.Error(), tc.wantSub)
+			}
+		})
+	}
+}

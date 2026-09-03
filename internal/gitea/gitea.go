@@ -94,13 +94,21 @@ func (c *officialClient) do(ctx context.Context, method, path string, body, v an
 
 	// Non-2xx: classify by status.
 	respBody, _ := io.ReadAll(resp.Body)
-	return &platforms.Error{
-		Kind:       platforms.ClassifyStatus(resp.StatusCode),
+	kind := platforms.ClassifyStatus(resp.StatusCode)
+	out := &platforms.Error{
+		Kind:       kind,
 		Op:         method + " " + path,
 		Err:        fmt.Errorf("status %d: %s", resp.StatusCode, string(respBody)),
 		StatusCode: resp.StatusCode,
 		RetryAfter: platforms.RetryAfterFromHeader(resp.Header),
 	}
+	// Gitea/Forgejo response bodies don't carry a structured
+	// token-state signal, so we fall back to the generic 401-vs-403
+	// hint.
+	if kind == platforms.KindAuth {
+		out.Hint = platforms.AuthHint("Gitea/Forgejo", resp.StatusCode)
+	}
+	return out
 }
 
 func (c *officialClient) GetProject(ctx context.Context, repoPath string) (*platforms.Project, error) {

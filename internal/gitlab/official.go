@@ -241,6 +241,11 @@ func classifyError(op string, err error) error {
 		if er.Response != nil {
 			out.RetryAfter = platforms.RetryAfterFromHeader(er.Response.Header)
 		}
+		// GitLab response bodies don't carry a structured token-state
+		// signal, so we fall back to the generic 401-vs-403 hint.
+		if kind == platforms.KindAuth {
+			out.Hint = platforms.AuthHint("GitLab", status)
+		}
 		return out
 	}
 	var ne net.Error

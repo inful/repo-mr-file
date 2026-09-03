@@ -153,3 +153,33 @@ func As(err error) *Error {
 	}
 	return nil
 }
+
+// AuthHint returns an operator-friendly diagnostic for the given
+// platform + status code. It's used by per-platform classifiers as
+// the default fallback for KindAuth errors when no platform-specific
+// body parsing is available (i.e. GitLab and Gitea/Forgejo, whose
+// response bodies don't carry a reliable token-state signal).
+//
+// GitHub has its own richer hint logic and calls SetAuthHint
+// directly instead of this helper.
+//
+// Pass platform as the lowercase, user-facing name ("gitlab",
+// "github", "gitea/forgejo").
+func AuthHint(platform string, status int) string {
+	switch status {
+	case http.StatusUnauthorized:
+		return fmt.Sprintf(
+			"token rejected by %s (401 Unauthorized). The token may be expired, revoked, or invalid; verify --api-token is correct and active. "+
+				"GitLab PATs are managed at https://gitlab.com/-/user_settings/personal_access_tokens",
+			platform,
+		)
+	case http.StatusForbidden:
+		return fmt.Sprintf(
+			"token rejected by %s (403 Forbidden). The token is valid but lacks the access required for this operation "+
+				"(typically the `api` scope and write access to the target repository)",
+			platform,
+		)
+	default:
+		return ""
+	}
+}

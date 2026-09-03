@@ -325,3 +325,54 @@ func TestGitea_BadBaseURL(t *testing.T) {
 
 // silence unused import in case fmt becomes unused after future edits.
 var _ = fmt.Sprintf
+
+// TestGitea_AuthHints locks in the Gitea/Forgejo auth hint
+// classification. Response bodies don't carry a structured
+// token-state signal, so the hint is a 401-vs-403 split: 401 says
+// the token is bad/expired/revoked; 403 says the token is valid but
+// under-scoped. The kind stays KindAuth (exit 3) across both cases.
+func TestGitea_AuthHints(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		body    string
+		wantSub string
+	}{
+		{"401", http.StatusUnauthorized, `{"message":"401 Unauthorized"}`, "401 Unauthorized"},
+		{"403", http.StatusForbidden, `{"message":"403 Forbidden"}`, "403 Forbidden"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+
+			c := NewOfficialClient(srv.URL, "test-token")
+			_, err := c.GetProject(context.Background(), "foo/bar")
+			if err == nil {
+				t.Fatal("expected auth error")
+			}
+			e := platforms.As(err)
+			if e == nil {
+				t.Fatalf("expected *platforms.Error, got %T: %v", err, err)
+			}
+			if e.Kind != platforms.KindAuth {
+				t.Errorf("Kind = %v, want KindAuth", e.Kind)
+			}
+			if e.StatusCode != tc.status {
+				t.Errorf("StatusCode = %d, want %d", e.StatusCode, tc.status)
+			}
+			if !strings.Contains(e.Hint, tc.wantSub) {
+				t.Errorf("Hint = %q, want substring %q", e.Hint, tc.wantSub)
+			}
+			// Hint must replace the underlying message so the
+			// operator reads the diagnostic.
+			if !strings.Contains(err.Error(), tc.wantSub) {
+				t.Errorf("Error() = %q, want substring %q", err.Error(), tc.wantSub)
+			}
+		})
+	}
+}

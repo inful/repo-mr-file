@@ -120,6 +120,49 @@ func ghError(err error) (int, http.Header, bool) {
 	return 0, nil, false
 }
 
+// githubAuthHint distinguishes the four practical GitHub auth
+// failure modes operators hit: expired/revoked PAT (401 Bad
+// credentials), primary rate-limit (403 + X-RateLimit-Remaining: 0),
+// fine-grained PAT scope mismatch (403 + "Resource not accessible by
+// personal access token" message), and generic 403 insufficient
+// permission.
+//
+// message is the *gh.ErrorResponse.Message field; hdr is the
+// response header (may be nil for synthetic errors).
+func githubAuthHint(status int, message string, hdr http.Header) string {
+	switch status {
+	case http.StatusUnauthorized:
+		// GitHub uses "Bad credentials" for both expired and revoked
+		// classic PATs and for tokens the user manually deleted from
+		// settings. There's no body-level distinction.
+		if strings.Contains(message, "Bad credentials") {
+			return "GitHub rejected the token (401 Bad credentials). The token may be expired or revoked; verify or regenerate at https://github.com/settings/tokens"
+		}
+		return "GitHub rejected the token (401 Unauthorized). The token is invalid or revoked; verify --api-token is correct and active at https://github.com/settings/tokens"
+	case http.StatusForbidden:
+		// Primary rate-limit: the header is the authoritative signal,
+		// not the body. When Remaining==0 we treat it as rate-limit
+		// regardless of the message.
+		if hdr != nil && hdr.Get("X-RateLimit-Remaining") == "0" {
+			reset := hdr.Get("X-RateLimit-Reset")
+			hint := "GitHub API rate limit exceeded (403 Forbidden). Wait until the X-RateLimit-Reset time and retry"
+			if reset != "" {
+				hint += " (resets at epoch=" + reset + ")"
+			}
+			return hint
+		}
+		// Fine-grained PAT scope mismatch: GitHub returns this exact
+		// string in the body when a token is valid but lacks the
+		// specific repository permission the call needs.
+		if strings.Contains(message, "Resource not accessible by personal access token") {
+			return "GitHub rejected the token with insufficient scope (403 Resource not accessible). For fine-grained tokens, grant repository contents + pull requests write permission; for classic PATs, ensure the `repo` scope is selected"
+		}
+		return "GitHub rejected the token (403 Forbidden). The token is valid but lacks write access to this repository; verify the token has the required scope and that you have write access to the repository"
+	default:
+		return ""
+	}
+}
+
 // classifyErr maps a Go-github error into a typed *platforms.Error.
 func classifyErr(op string, err error) error {
 	if status, hdr, ok := ghError(err); ok {
@@ -132,10 +175,29 @@ func classifyErr(op string, err error) error {
 		if hdr != nil {
 			out.RetryAfter = platforms.RetryAfterFromHeader(hdr)
 		}
+		// GitHub carries a structured token-state signal in the
+		// error message and rate-limit info in the headers, so we
+		// use the richer per-platform classifier rather than the
+		// generic fallback.
+		if out.Kind == platforms.KindAuth {
+			out.Hint = githubAuthHint(status, ghMessage(err), hdr)
+		}
 		return out
 	}
 	// Network or unexpected error → transient so the bundler retries.
 	return &platforms.Error{Kind: platforms.KindTransient, Op: op, Err: err}
+}
+
+// ghMessage extracts the Message field from a *gh.ErrorResponse,
+// returning "" if err doesn't carry one. Used by the auth-hint
+// classifier; the field has already been JSON-decoded by go-github
+// when it constructed the *ErrorResponse.
+func ghMessage(err error) string {
+	var ghErr *gh.ErrorResponse
+	if errors.As(err, &ghErr) {
+		return ghErr.Message
+	}
+	return ""
 }
 
 // CreateBranch creates refs/heads/<newBranch> at startBranch's SHA
