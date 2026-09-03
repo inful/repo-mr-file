@@ -50,6 +50,30 @@ func TestError_ErrorWithoutOp(t *testing.T) {
 	}
 }
 
+// TestError_HintReplacesErrMessage verifies that when Hint is set,
+// Error() returns "<Op>: <Hint>" so the operator reads the actionable
+// diagnostic directly, instead of the raw "<Op>: <underlying err>".
+func TestError_HintReplacesErrMessage(t *testing.T) {
+	e := New(KindAuth, "GetProject", errors.New("401 Unauthorized"))
+	e.Hint = "token rejected; verify --api-token"
+	got := e.Error()
+	want := "GetProject: token rejected; verify --api-token"
+	if got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
+}
+
+// TestError_HintWithoutOp verifies the no-Op branch when Hint is set.
+func TestError_HintWithoutOp(t *testing.T) {
+	e := New(KindAuth, "", errors.New("401 Unauthorized"))
+	e.Hint = "token rejected"
+	got := e.Error()
+	want := "token rejected"
+	if got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
+}
+
 func TestError_Unwrap(t *testing.T) {
 	inner := errors.New("inner error")
 	e := New(KindAuth, "GetProject", inner)

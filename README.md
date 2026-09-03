@@ -183,6 +183,30 @@ Note: stale-branch conflicts map to exit 5 on all platforms. GitLab
 returns 409; GitHub and Gitea/Forgejo return 422 — both are normalized
 to `KindConflict`.
 
+### Auth errors (exit 3) carry an actionable hint
+
+When the platform rejects the token (401/403), the log line includes
+a human-readable diagnostic that distinguishes the most common
+operational causes, so the operator doesn't have to interpret a bare
+`"401 Unauthorized"`:
+
+| Platform  | 401 hint                                              | 403 hint                                                                  |
+|-----------|-------------------------------------------------------|---------------------------------------------------------------------------|
+| GitHub    | "token expired or revoked; verify at https://github.com/settings/tokens" | distinguishes **rate-limited** (X-RateLimit-Remaining: 0), **fine-grained under-scoped** (body: "Resource not accessible by personal access token"), and **generic insufficient permission** |
+| GitLab    | "token bad/expired/revoked; verify at https://gitlab.com/-/user_settings/personal_access_tokens" | "token valid but lacks the access required (typically `api` scope + write access to the repository)" |
+| Gitea / Forgejo | "token bad/expired; verify --api-token"         | "token valid but lacks write access to the repository" |
+
+Example log line on a GitHub expired PAT:
+
+```
+level=ERROR msg=bundler failed err="GetProject: GitHub rejected the token (401 Bad credentials). The token may be expired or revoked; verify or regenerate at https://github.com/settings/tokens."
+```
+
+The hint replaces the raw platform error in the `err=` log key so the
+diagnostic is visible without parsing JSON; the underlying error is
+still available via `errors.As(err, &platforms.Error{})` for programs
+that want to inspect it programmatically.
+
 ## Design rationale
 
 The tool mirrors what a careful human operator would do by hand when

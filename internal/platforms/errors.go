@@ -71,9 +71,32 @@ type Error struct {
 	// hint; use the configured exponential backoff". WithRetry honors
 	// this value (capped at MaxRetryAfter) instead of the backoff.
 	RetryAfter time.Duration
+	// Hint is an operator-friendly, human-readable diagnostic for
+	// this error. When non-empty, Error() returns "<Op>: <Hint>"
+	// (or just "<Hint>" when Op is empty), so the operator sees
+	// the actionable guidance directly in the log line instead of
+	// the raw "<Op>: <underlying err>".
+	//
+	// Hint is currently populated only for KindAuth errors by the
+	// per-platform classify functions; it distinguishes
+	// expired/revoked tokens from insufficient scope (GitHub can
+	// distinguish the four cases via body + headers; GitLab and
+	// Gitea/Forgejo fall back to a 401-vs-403 split because their
+	// response bodies don't carry a structured signal).
+	Hint string
 }
 
+// Error returns "<Op>: <Hint>" when Hint is set (so the operator reads
+// the actionable diagnostic directly), otherwise the original
+// "<Op>: <underlying err>" format. Existing tests and log-grep
+// pipelines continue to work because Hint defaults to empty.
 func (e *Error) Error() string {
+	if e.Hint != "" {
+		if e.Op == "" {
+			return e.Hint
+		}
+		return fmt.Sprintf("%s: %s", e.Op, e.Hint)
+	}
 	if e.Op == "" {
 		return e.Err.Error()
 	}
