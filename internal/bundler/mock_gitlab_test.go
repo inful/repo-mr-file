@@ -38,14 +38,15 @@ type mockGitLab struct {
 	createMRResp     string // JSON body for CreateMR
 
 	// Recorded calls.
-	getProjectCalls   atomic.Int32
-	getBranchCalls    atomic.Int32
-	getFileCalls      atomic.Int32
-	getFileRef        atomic.Value // string
-	createFileCalls   atomic.Int32
-	createFileContent atomic.Value // []byte
-	createBranchCalls atomic.Int32
-	createBranchReqs  []struct {
+	getProjectCalls    atomic.Int32
+	getBranchCalls     atomic.Int32
+	getFileCalls       atomic.Int32
+	getFileRef         atomic.Value // string
+	createFileCalls    atomic.Int32
+	createFileContent  atomic.Value // []byte
+	createFileStartRef atomic.Value // string — start_branch from the request body
+	createBranchCalls  atomic.Int32
+	createBranchReqs   []struct {
 		Branch string `json:"branch"`
 		Ref    string `json:"ref"`
 	}
@@ -136,6 +137,11 @@ func (m *mockGitLab) handle(w http.ResponseWriter, r *http.Request) {
 		m.createFileCalls.Add(1)
 		body, _ := io.ReadAll(r.Body)
 		m.createFileContent.Store(body)
+		var payload struct {
+			StartBranch string `json:"start_branch"`
+		}
+		_ = json.Unmarshal(body, &payload)
+		m.createFileStartRef.Store(payload.StartBranch)
 		writeJSON(w, m.createFileStatus, map[string]any{"file_path": "ca.pem"})
 
 	case r.Method == http.MethodPut && strings.Contains(path, "/repository/files/"):

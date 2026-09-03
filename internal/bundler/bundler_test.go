@@ -213,6 +213,58 @@ func TestRun_BranchMissing_UsesTargetAsFileRef(t *testing.T) {
 	}
 }
 
+// TestRun_BranchExists_NoStartBranchOnCreateFile is the regression
+// test for the v0.9.7 bug where the bundler passed
+// startBranch=branchName to CreateFile when the branch already
+// existed. GitLab's Files::CreateService then invoked
+// Branches::CreateService a second time and failed with HTTP 400
+// "A branch called 'X' already exists", surfacing as a KindConfig
+// exit (code 2). The fix: when the branch exists, no start_branch
+// is sent to GitLab at all.
+func TestRun_BranchExists_NoStartBranchOnCreateFile(t *testing.T) {
+	mock := newMockGitLab(t)
+	mock.branchExists = true
+	// File does not exist on the branch (fileStatus=404 by default),
+	// so CreateFile (POST) is the chosen write path.
+	deps := stubDeps(t, mock, []byte("bundle"), defaultConfig())
+
+	_, err := Run(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if got := mock.createFileCalls.Load(); got != 1 {
+		t.Errorf("CreateFile calls = %d, want 1", got)
+	}
+	startRef, _ := mock.createFileStartRef.Load().(string)
+	if startRef != "" {
+		t.Errorf("CreateFile start_branch = %q, want empty (branch already existed)", startRef)
+	}
+}
+
+// TestRun_BranchMissing_PassesTargetAsStartBranch locks in the
+// positive case: when the branch is freshly created from the
+// target, CreateFile's start_branch IS set to the target so GitLab
+// can auto-create the new branch atomically.
+func TestRun_BranchMissing_PassesTargetAsStartBranch(t *testing.T) {
+	mock := newMockGitLab(t)
+	mock.branchExists = false
+	deps := stubDeps(t, mock, []byte("bundle"), defaultConfig())
+
+	_, err := Run(context.Background(), deps)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if got := mock.createFileCalls.Load(); got != 1 {
+		t.Errorf("CreateFile calls = %d, want 1", got)
+	}
+	startRef, _ := mock.createFileStartRef.Load().(string)
+	if startRef != deps.Config.TargetBranch {
+		t.Errorf("CreateFile start_branch = %q, want %q", startRef, deps.Config.TargetBranch)
+	}
+}
+
 func TestRun_UpdateFileConflict_PropagatesError(t *testing.T) {
 	mock := newMockGitLab(t)
 	mock.fileStatus = 200

@@ -138,15 +138,33 @@ func Run(ctx context.Context, deps Deps) (result Result, err error) {
 	if err != nil {
 		return Result{}, err
 	}
-	sourceBranch := targetBranch
+	// fileBranch is the ref we GetFile from — usually the new branch,
+	// but the parent's ref when the branch was just created (the new
+	// branch inherits the parent's tree, and GetFile against the
+	// freshly-created branch can lag behind the parent's API state).
+	//
+	// parentBranch is the value we pass as CreateFile's startBranch so
+	// the platform can auto-create the new branch atomically. It's
+	// empty when the branch already exists; passing it as the existing
+	// branch's own name would cause GitLab's Files::CreateService to
+	// invoke Branches::CreateService a second time and fail with
+	// "A branch called 'X' already exists" (HTTP 400).
+	//
+	// The bug shipped before v0.9.7 because the bundler conflated
+	// "the branch we operate on" with "the parent for auto-creation"
+	// into a single sourceBranch value.
+	var fileBranch, parentBranch string
 	if branchExists {
 		logger.Info(msgBranchExists)
-		sourceBranch = deps.Config.BranchName
+		fileBranch = deps.Config.BranchName
+		parentBranch = "" // no auto-creation needed
 	} else {
 		logger.Info(fmt.Sprintf(msgBranchDoesNotExist, targetBranch))
 		if err := deps.Client.CreateBranch(ctx, deps.Config.Repo, deps.Config.BranchName, targetBranch); err != nil {
 			return Result{}, err
 		}
+		fileBranch = targetBranch // GetFile against parent; new branch inherits it
+		parentBranch = targetBranch
 	}
 
 	// Step 4: existing MR.
@@ -156,26 +174,30 @@ func Run(ctx context.Context, deps Deps) (result Result, err error) {
 	}
 
 	// Step 5 + 6: file check + write.
-	writeNeeded, _, err := writeFileIfNeeded(ctx, logger, deps, sourceBranch, targetBranch)
+	writeNeeded, _, err := writeFileIfNeeded(ctx, logger, deps, fileBranch, parentBranch, targetBranch)
 	if err != nil {
 		return Result{}, err
 	}
 
 	// Step 7: short-circuit when the bundle already matches and no work
 	// remains to do. If the bundle matches but no MR exists yet and the
-	// source branch differs from the target, we still need to create
-	// the MR (without writing the file).
+	// source branch was freshly created from the target, we know the
+	// branch was created by THIS run and the file on it is whatever
+	// the target branch has — so if it matches the source there's
+	// truly nothing to do. If the branch already existed (parentBranch
+	// is empty), the user might still want an MR opened, so we fall
+	// through to CreateMR.
 	if !writeNeeded {
 		if existingMR != nil {
 			logger.Info(fmt.Sprintf(msgExistingMR, existingMR.WebURL))
 			return Result{Skipped: true, MRURL: existingMR.WebURL}, nil
 		}
-		if sourceBranch == targetBranch {
+		if parentBranch == targetBranch && parentBranch != "" {
 			logger.Info(msgNoUpdateNeeded)
 			return Result{Skipped: true}, nil
 		}
-		// else: file matches but source != target and no MR — fall
-		// through to CreateMR.
+		// else: file matches and either no MR exists or the branch
+		// already existed — fall through to CreateMR.
 	}
 
 	// Step 8: MR.
@@ -206,7 +228,7 @@ func Run(ctx context.Context, deps Deps) (result Result, err error) {
 }
 
 // writeFileIfNeeded compares the source bundle against the file at
-// (Repo, TargetPath, sourceBranch). It writes the file when it differs from
+// (Repo, TargetPath, fileBranch). It writes the file when it differs from
 // the source (or doesn't exist), and reports back:
 //
 //   - writeNeeded:  true if the caller must continue to MR creation;
@@ -215,21 +237,31 @@ func Run(ctx context.Context, deps Deps) (result Result, err error) {
 //     still create the MR).
 //   - lastCommitID: populated when a PUT is needed; empty for POST.
 //
+// The parentBranch arg is passed as CreateFile's startBranch so the
+// platform can auto-create the new branch atomically when needed.
+// It's empty when the branch already existed; passing it as the
+// existing branch's own name causes GitLab's Files::CreateService
+// to invoke Branches::CreateService a second time and fail with
+// "A branch called 'X' already exists" (HTTP 400).
+//
 // Note: callers must still call CreateMR when writeNeeded is false but
-// the source branch differs from the target (file matches, no MR yet —
-// we still want the MR).
-func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, sourceBranch, targetBranch string) (writeNeeded bool, lastCommitID string, err error) {
-	file, ferr := deps.Client.GetFile(ctx, deps.Config.Repo, deps.Config.TargetPath, sourceBranch)
+// the source branch was freshly created from the target (file matches,
+// no MR yet — caller short-circuits with Skipped=true).
+func writeFileIfNeeded(ctx context.Context, logger *slog.Logger, deps Deps, fileBranch, parentBranch, targetBranch string) (writeNeeded bool, lastCommitID string, err error) {
+	file, ferr := deps.Client.GetFile(ctx, deps.Config.Repo, deps.Config.TargetPath, fileBranch)
 	if ferr != nil {
 		if e := platforms.As(ferr); e == nil || e.Kind != platforms.KindNotFound {
 			return false, "", ferr
 		}
-		// File does not exist — POST it. Pass sourceBranch (the
-		// parent) as startBranch so platforms that require it
-		// (GitLab) can auto-create the new branch atomically.
+		// File does not exist — POST it. Pass parentBranch (the
+		// parent branch) as startBranch so platforms that require
+		// it (GitLab) can auto-create the new branch atomically.
+		// When the branch already exists, parentBranch is "" and
+		// no start_branch is sent to GitLab — see the comment at
+		// the call site.
 		logger.Info(fmt.Sprintf(msgCreatingFile, deps.Config.TargetPath, deps.Config.Repo))
 		if cerr := deps.Client.CreateFile(ctx, deps.Config.Repo,
-			deps.Config.BranchName, deps.Config.TargetPath, sourceBranch,
+			deps.Config.BranchName, deps.Config.TargetPath, parentBranch,
 			deps.Config.CommitMessage, bytes.NewReader(deps.Source)); cerr != nil {
 			return false, "", cerr
 		}
