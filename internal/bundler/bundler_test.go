@@ -3,10 +3,13 @@ package bundler
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -242,11 +245,13 @@ func TestRun_BranchExists_NoStartBranchOnCreateFile(t *testing.T) {
 	}
 }
 
-// TestRun_BranchMissing_PassesTargetAsStartBranch locks in the
-// positive case: when the branch is freshly created from the
-// target, CreateFile's start_branch IS set to the target so GitLab
-// can auto-create the new branch atomically.
-func TestRun_BranchMissing_PassesTargetAsStartBranch(t *testing.T) {
+// TestRun_BranchMissing_NoStartBranchOnCreateFile locks in the
+// v0.9.8 design: CreateFile never receives a start_branch, regardless
+// of whether the branch existed or was just created. The bundler's
+// CreateBranch call (step 3) ensures the branch exists, and passing
+// start_branch to GitLab's CreateFile would re-trigger
+// Branches::CreateService and fail with HTTP 400.
+func TestRun_BranchMissing_NoStartBranchOnCreateFile(t *testing.T) {
 	mock := newMockGitLab(t)
 	mock.branchExists = false
 	deps := stubDeps(t, mock, []byte("bundle"), defaultConfig())
@@ -260,8 +265,8 @@ func TestRun_BranchMissing_PassesTargetAsStartBranch(t *testing.T) {
 		t.Errorf("CreateFile calls = %d, want 1", got)
 	}
 	startRef, _ := mock.createFileStartRef.Load().(string)
-	if startRef != deps.Config.TargetBranch {
-		t.Errorf("CreateFile start_branch = %q, want %q", startRef, deps.Config.TargetBranch)
+	if startRef != "" {
+		t.Errorf("CreateFile start_branch = %q, want empty (bundler always pre-creates branch)", startRef)
 	}
 }
 
@@ -414,5 +419,94 @@ func TestRun_LoggerLogsBashMirroringLines(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("log output missing %q\noutput:\n%s", want, out)
 		}
+	}
+}
+
+// TestRun_CreateFile_FreshBranchNoStartBranch_NoBranchExistsError is the
+// end-to-end regression test for the v0.9.8 bug. Real-world reproduction:
+//
+//  1. Bundler calls GetBranch → false.
+//  2. Bundler calls CreateBranch → succeeds.
+//  3. Bundler calls CreateFile with start_branch=main. GitLab's
+//     Files::CreateService invokes Branches::CreateService again
+//     and returns HTTP 400 "A branch called 'X' already exists"
+//     even though the branch was just created.
+//
+// The fix: never send start_branch to CreateFile. This test fails
+// any CreateFile that contains "start_branch" in its request body.
+//
+// The mock uses a real httptest server + the actual GitLab Go
+// client to exercise the end-to-end flow.
+func TestRun_CreateFile_FreshBranchNoStartBranch_NoBranchExistsError(t *testing.T) {
+	var (
+		mu                  sync.Mutex
+		createFileBodies    []string
+		sawStartBranchInAny bool
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		body, _ := io.ReadAll(r.Body)
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/projects/foo/bar"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 42, "default_branch": "main"})
+		case r.Method == http.MethodGet && strings.Contains(path, "/repository/branches/update-v1"):
+			// Branch missing initially.
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"404 Branch Not Found"}`))
+		case r.Method == http.MethodPost && strings.HasSuffix(path, "/repository/branches"):
+			// CreateBranch succeeds.
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"name":"update-v1"}`))
+		case r.Method == http.MethodGet && strings.Contains(path, "/repository/files/"):
+			// File doesn't exist on the new branch.
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"404 File Not Found"}`))
+		case r.Method == http.MethodPost && strings.Contains(path, "/repository/files/"):
+			// CreateFile: must NOT contain start_branch.
+			mu.Lock()
+			createFileBodies = append(createFileBodies, string(body))
+			if strings.Contains(string(body), "start_branch") {
+				sawStartBranchInAny = true
+			}
+			mu.Unlock()
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"file_path":"ca.pem"}`))
+		case r.Method == http.MethodGet && strings.Contains(path, "/merge_requests"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case r.Method == http.MethodPost && strings.Contains(path, "/merge_requests"):
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"iid":7,"web_url":"https://example/foo/bar/-/merge_requests/7"}`))
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"unexpected: ` + r.Method + " " + path + `"}`))
+		}
+	}))
+	defer srv.Close()
+
+	cfg := defaultConfig()
+	cfg.Repo = "foo/bar"
+	cfg.BranchName = "update-v1"
+	cfg.TargetPath = "ca.pem"
+	cfg.TargetBranch = "main"
+
+	oc := gitlab.NewOfficialClient(srv.URL+"/api/v4", "test-token")
+	deps := Deps{
+		Client: platforms.WithRetry(oc, platforms.RetryConfig{MaxAttempts: 1, InitialBackoff: time.Microsecond}),
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Config: cfg,
+		Source: []byte("new content"),
+	}
+
+	if _, err := Run(context.Background(), deps); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(createFileBodies) != 1 {
+		t.Errorf("CreateFile calls = %d, want 1", len(createFileBodies))
+	}
+	if sawStartBranchInAny {
+		t.Errorf("CreateFile request body contained start_branch; this re-triggers GitLab's Branches::CreateService and produces the 'A branch called X already exists' 400 error. bodies: %v", createFileBodies)
 	}
 }

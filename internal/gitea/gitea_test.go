@@ -113,7 +113,7 @@ func TestGitea_CreateFile_HappyPath(t *testing.T) {
 	defer srv.Close()
 
 	c := NewOfficialClient(srv.URL, "test-token")
-	if err := c.CreateFile(context.Background(), "foo/bar", "update-v1", "ca.pem", "main", "msg", strings.NewReader("hello\n")); err != nil {
+	if err := c.CreateFile(context.Background(), "foo/bar", "update-v1", "ca.pem", "msg", strings.NewReader("hello\n")); err != nil {
 		t.Fatalf("CreateFile: %v", err)
 	}
 	if seenMethod != http.MethodPost {

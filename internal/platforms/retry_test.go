@@ -184,7 +184,7 @@ func TestWithRetry_DelegatesToInner(t *testing.T) {
 	_, _ = c.GetProject(ctx, "foo/bar")
 	_, _ = c.GetBranch(ctx, "foo/bar", "main")
 	_, _ = c.GetFile(ctx, "foo/bar", "ca.pem", "main")
-	_ = c.CreateFile(ctx, "foo/bar", "b", "ca.pem", "main", "m", strings.NewReader("c"))
+	_ = c.CreateFile(ctx, "foo/bar", "b", "ca.pem", "m", strings.NewReader("c"))
 	_ = c.UpdateFile(ctx, "foo/bar", "b", "ca.pem", "main", "m", "id", strings.NewReader("c"))
 	_, _ = c.ListOpenMR(ctx, "foo/bar", "src", "tgt")
 	_, _ = c.CreateMR(ctx, "foo/bar", CreateMRInput{})

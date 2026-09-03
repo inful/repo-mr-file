@@ -41,7 +41,7 @@ func (r *recordingProjectClient) CreateBranch(_ context.Context, _, _, _ string)
 func (r *recordingProjectClient) GetFile(_ context.Context, _, _, _ string) (*platforms.File, error) {
 	return nil, platforms.New(platforms.KindNotFound, "GetFile", errors.New("not found"))
 }
-func (r *recordingProjectClient) CreateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
+func (r *recordingProjectClient) CreateFile(_ context.Context, _, _, _, _ string, _ io.Reader) error {
 	return nil
 }
 func (r *recordingProjectClient) UpdateFile(_ context.Context, _, _, _, _, _, _ string, _ io.Reader) error {

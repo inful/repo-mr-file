@@ -178,12 +178,14 @@ func (c *officialClient) CreateBranch(ctx context.Context, repoPath, newBranch, 
 // The bundler satisfies this contract in step 3 (CreateBranch) before
 // calling CreateFile in step 5.
 //
-// `startBranch` is unused here for symmetry with the platforms.Client
-// interface contract; the bundler hands it to CreateBranch at the
-// right moment. GitLab's CreateFile is the only implementation that
-// actually consumes it (for the implicit-branch-create on POST
-// /repository/files).
-func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg string, content io.Reader) error {
+// No startBranch parameter: GitLab's CreateFile was the only
+// implementation that used it (for implicit-branch-create on POST
+// /repository/files), but that path is now obsolete because the
+// bundler always creates the branch explicitly first. Passing
+// start_branch to GitLab would trigger a redundant
+// Branches::CreateService call that fails with HTTP 400 "A branch
+// called 'X' already exists".
+func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, filePath, commitMsg string, content io.Reader) error {
 	contentBytes, err := io.ReadAll(content)
 	if err != nil {
 		return platforms.New(platforms.KindConfig, "CreateFile", err)

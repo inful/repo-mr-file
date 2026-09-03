@@ -44,8 +44,8 @@ func (r *recordingClient) GetFile(_ context.Context, repoPath, filePath, ref str
 	return nil, nil
 }
 
-func (r *recordingClient) CreateFile(_ context.Context, repoPath, branch, filePath, startBranch, commitMsg string, _ io.Reader) error {
-	r.record("CreateFile", repoPath, branch, filePath, commitMsg, startBranch)
+func (r *recordingClient) CreateFile(_ context.Context, repoPath, branch, filePath, commitMsg string, _ io.Reader) error {
+	r.record("CreateFile", repoPath, branch, filePath, commitMsg)
 	return nil
 }
 
@@ -122,7 +122,7 @@ func (a *AlwaysFailingClient) GetFile(_ context.Context, _, _, _ string) (*File,
 }
 
 // CreateFile returns the stored error. See AlwaysFailingClient.
-func (a *AlwaysFailingClient) CreateFile(_ context.Context, _, _, _, _, _ string, _ io.Reader) error {
+func (a *AlwaysFailingClient) CreateFile(_ context.Context, _, _, _, _ string, _ io.Reader) error {
 	return a.err
 }
 

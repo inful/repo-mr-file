@@ -80,7 +80,7 @@ func (c *officialClient) GetFile(ctx context.Context, repoPath, filePath, ref st
 	}, nil
 }
 
-func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, filePath, startBranch, commitMsg string, content io.Reader) error {
+func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, filePath, commitMsg string, content io.Reader) error {
 	contentBytes, err := io.ReadAll(content)
 	if err != nil {
 		return platforms.New(platforms.KindConfig, "CreateFile", err)
@@ -93,14 +93,16 @@ func (c *officialClient) CreateFile(ctx context.Context, repoPath, branch, fileP
 		Content:       &encoded,
 		CommitMessage: &commitMsg,
 	}
-	// startBranch is the parent branch to fork from when GitLab
-	// auto-creates the target branch on POST /repository/files.
-	// Without it, GitLab returns HTTP 400 ("You can only create or
-	// edit files when you are on a branch") for a fresh branch.
-	// Bundlers pass target branch (main/master/develop) here.
-	if startBranch != "" {
-		opts.StartBranch = &startBranch
-	}
+	// startBranch intentionally omitted from this signature: the
+	// bundler calls CreateBranch before CreateFile (when needed),
+	// so the branch always exists by this point. Passing
+	// start_branch to GitLab would make Files::CreateService
+	// invoke Branches::CreateService a second time and fail with
+	// "A branch called 'X' already exists" (HTTP 400). The error
+	// happens even after our own CreateBranch has just succeeded,
+	// because GitLab's branch-existence check is part of the
+	// start_branch handling path, not a separate "exists → skip"
+	// guard.
 	_, _, err = c.client.RepositoryFiles.CreateFile(repoPath, filePath, opts,
 		gitlab.WithContext(ctx))
 	if err != nil {

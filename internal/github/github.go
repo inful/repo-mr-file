@@ -331,7 +331,7 @@ func (c *client) GetFile(ctx context.Context, repoPath, filePath, ref string) (*
 // `startBranch` is unused here for symmetry with the platforms.Client
 // interface contract; the bundler hands it to CreateBranch at the
 // right moment.
-func (c *client) CreateFile(ctx context.Context, repoPath, branch, filePath, _, commitMsg string, content io.Reader) error {
+func (c *client) CreateFile(ctx context.Context, repoPath, branch, filePath, commitMsg string, content io.Reader) error {
 	owner, repo, err := splitRepoPath(repoPath)
 	if err != nil {
 		return &platforms.Error{Kind: platforms.KindConfig, Op: "CreateFile", Err: err}

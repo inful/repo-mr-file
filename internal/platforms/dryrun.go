@@ -42,7 +42,7 @@ func (d *dryRunClient) GetFile(_ context.Context, repoPath, filePath, ref string
 	return nil, New(KindNotFound, "GetFile(dry-run)", errors.New("dry-run: file not fetched"))
 }
 
-func (d *dryRunClient) CreateFile(_ context.Context, repoPath, branch, filePath, _, commitMsg string, _ io.Reader) error {
+func (d *dryRunClient) CreateFile(_ context.Context, repoPath, branch, filePath, commitMsg string, _ io.Reader) error {
 	d.record("CreateFile", repoPath, branch, filePath, commitMsg)
 	return nil
 }

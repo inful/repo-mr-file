@@ -162,7 +162,7 @@ func TestOfficialClient_CreateFile_SendsBase64(t *testing.T) {
 	defer srv.Close()
 
 	c := NewOfficialClient(srv.URL+"/api/v4", "test-token")
-	if err := c.CreateFile(context.Background(), "foo/bar", "branch", "ca.pem", "main", "msg", strings.NewReader("hello")); err != nil {
+	if err := c.CreateFile(context.Background(), "foo/bar", "branch", "ca.pem", "msg", strings.NewReader("hello")); err != nil {
 		t.Fatalf("CreateFile: %v", err)
 	}
 	body, _ := seenBody.Load().(string)
@@ -174,6 +174,9 @@ func TestOfficialClient_CreateFile_SendsBase64(t *testing.T) {
 	}
 	if !strings.Contains(body, `"branch":"branch"`) {
 		t.Errorf("body missing branch: %s", body)
+	}
+	if strings.Contains(body, `"start_branch"`) {
+		t.Errorf("body must not include start_branch: %s", body)
 	}
 }
 

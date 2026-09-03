@@ -166,7 +166,7 @@ func TestGitHub_CreateFile_Success(t *testing.T) {
 	defer srv.Close()
 
 	c := newClient(t, srv, "test-token")
-	err := c.CreateFile(context.Background(), "octocat/hello", "update-v1", "ca.pem", "main", "msg", strings.NewReader("hello\n"))
+	err := c.CreateFile(context.Background(), "octocat/hello", "update-v1", "ca.pem", "msg", strings.NewReader("hello\n"))
 	if err != nil {
 		t.Fatalf("CreateFile: %v", err)
 	}

@@ -42,24 +42,27 @@ type CreateMRInput struct {
 // (GitLab, GitHub, Gitea, Forgejo). Platform-specific implementations are
 // in sub-packages; this package provides retry, recording, and dry-run wrappers.
 //
-// CreateFile and UpdateFile take a `startBranch` parameter (the parent
-// branch the new branch forks from). The bundler resolves
-// startBranch = target branch (main/master/develop) when the
-// configured branch doesn't yet exist.
-//
 // CreateBranch is invoked by the bundler when GetBranch returns
-// false, before any file POST. Implementations use each platform's
-// native API (Gitea POST /branches, GitHub POST /git/refs, GitLab
-// POST /repository/branches). The "branch must exist before PUT
-// file contents" contract is honoured by every platform this way,
-// regardless of whether the upstream accidentally auto-creates
-// branches on empty repos.
+// false, before any file POST. By the time CreateFile is called, the
+// branch is guaranteed to exist (either it existed already or the
+// bundler just created it), so CreateFile takes only the target
+// branch name — no startBranch parameter. Earlier versions passed
+// startBranch so platforms like GitLab could auto-create the branch
+// on POST /repository/files, but that path was buggy: GitLab
+// unconditionally tried to re-create the branch when start_branch
+// was set, returning HTTP 400 "A branch called 'X' already exists"
+// even after CreateBranch had just succeeded.
+//
+// UpdateFile still takes startBranch for historical signature
+// stability; no platform implementation uses it (GitHub requires
+// the branch to exist — ensured by CreateBranch; GitLab and
+// Gitea/Forgejo PUT /repository/files doesn't auto-create either).
 type Client interface {
 	GetProject(ctx context.Context, repoPath string) (*Project, error)
 	GetBranch(ctx context.Context, repoPath, branch string) (exists bool, err error)
 	CreateBranch(ctx context.Context, repoPath, newBranch, startBranch string) error
 	GetFile(ctx context.Context, repoPath, filePath, ref string) (*File, error)
-	CreateFile(ctx context.Context, repoPath, branch, filePath, startBranch, commitMsg string, content io.Reader) error
+	CreateFile(ctx context.Context, repoPath, branch, filePath, commitMsg string, content io.Reader) error
 	UpdateFile(ctx context.Context, repoPath, branch, filePath, startBranch, commitMsg, lastCommitID string, content io.Reader) error
 	ListOpenMR(ctx context.Context, repoPath, sourceBranch, targetBranch string) (*MergeRequest, error)
 	CreateMR(ctx context.Context, repoPath string, in CreateMRInput) (*MergeRequest, error)
